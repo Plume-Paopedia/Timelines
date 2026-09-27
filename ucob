@@ -251,6 +251,40 @@ local tbl =
 			inheritanceRoot = "store\\anyone\\ucob\\universal",
 			objectType = "folder",
 		},
+		
+		{
+			data = 
+			{
+				name = "Potion",
+				uuid = "c2d2f03b-dbfd-595d-9c4d-8de19bd05223",
+				version = 2,
+			},
+			inheritedObjectUUID = "9bd0c684-f92e-7d86-9d9a-1635fce362b5",
+			inheritedOverwrites = 
+			{
+				actions = 
+				{
+					
+					{
+						type = "add",
+						value = 
+						{
+							data = 
+							{
+								name = "",
+								uuid = "a7ddd9df-9bbc-7240-bdfe-13ba77ed317e",
+								version = 2.1,
+							},
+							inheritedObjectUUID = "b9c3fbaa-c866-401a-9566-be2479abb5a1",
+							inheritedOverwrites = 
+							{
+								alertText = "Burst sa mère",
+							},
+						},
+					},
+				},
+			},
+		},
 	},
 	[47] = 
 	{

@@ -70,7 +70,7 @@ local tbl =
 						data = 
 						{
 							aType = "Lua",
-							actionLua = "\nif not data.ucob_guide then\n    local g = { cues = {}, seen = {}, phase = 1, serial = 0, slotLayout = \"LR\", slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}, stacks = {}, shakers = {}, octet = {}, hatch = {} }\n    data.ucob_guide = g\n    data.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\n    function g.put(key, title, detail, nextText, priority, ttl, voice)\n        local now = Now()\n        local c = g.cues[key]\n        if not c then c = {}; g.cues[key] = c end\n        if c.title ~= title or not c.expires or c.expires <= now then\n            g.serial = g.serial + 1\n            c.serial = g.serial\n            c.born = now\n            c.spoken = false\n        end\n        c.title = title\n        c.detail = detail\n        c.nextText = nextText\n        c.priority = priority or 50\n        c.expires = now + ttl\n        c.voice = voice\n        return c\n    end\n    function g.drop(key)\n        local c = g.cues[key]\n        if c then c.expires = 0 end\n    end\n    function g.clear()\n        for _, c in pairs(g.cues) do c.expires = 0 end\n        for k in pairs(g.stacks) do g.stacks[k] = nil end\n        for k in pairs(g.shakers) do g.shakers[k] = nil end\n        for k in pairs(g.octet) do g.octet[k] = nil end\n        for k in pairs(g.hatch) do g.hatch[k] = nil end\n        g.stackCount, g.shakerCount = 0, 0\n        g.octetCount, g.shakerWave = 0, 0\n        g.shakerFirstMine = nil\n        g.mineStack, g.markerExpires, g.hatchExpires, g.octetMine = nil, nil, nil, nil\n    end\n    function g.tank(p)\n        return p.job == 19 or p.job == 21 or p.job == 32 or p.job == 37\n    end\n    function g.healer(p)\n        return p.job == 24 or p.job == 28 or p.job == 33 or p.job == 40\n    end\n    function g.select(now)\n        local best\n        for _, c in pairs(g.cues) do\n            if c.expires > now and (not best or c.priority > best.priority or\n                (c.priority == best.priority and c.serial > best.serial)) then best = c end\n        end\n        g.best = best\n        return best\n    end\n    function g.once(key, hold)\n        local now = Now()\n        if g.seen[key] and now - g.seen[key] < hold then return false end\n        g.seen[key] = now\n        return true\n    end\nend\nlocal s = data.ucob_guide\nif s.slotLayout ~= \"LR\" then\n    s.slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}\n    s.slotLayout = \"LR\"\nend\ndata.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\nif data.ucob_guide_settings.slotLayout ~= \"LR\" then\n    data.ucob_guide_settings.slot = 0\n    data.ucob_guide_settings.slotLayout = \"LR\"\nend\n\nlocal p = TensorCore.mGetPlayer()\nif not p then self.used = true return end\nlocal id = eventArgs.spellID\nlocal duration = math.max(300, (eventArgs.channelTimeMax or 0) * 1000)\nlocal now = Now()\nif id >= 9954 and id <= 9959 then\n    s.clear()\n    s.phase, s.trio = 3, id\n    local names = {[9954]=\"QUICKMARCH\", [9955]=\"BLACKFIRE\", [9956]=\"FELLRUIN\", [9957]=\"HEAVENSFALL\", [9958]=\"TENSTRIKE\", [9959]=\"GRAND OCTET\"}\n    s.put(\"trio\", names[id], \"Prépare ton placement de départ\", nil, 35, duration + 2000)\nelseif id == 9898 then\n    s.twintaniaID = eventArgs.entityID\n    s.put(\"twister\", \"BOUGE — TWISTER\", \"Petit déplacement continu ; évite de revenir sur tes pas\", \"Évite les tornades laissées au sol\", 100, duration + 500, \"Twister, bouge\")\nelseif id == 9906 then\n    s.put(\"dive\", \"ÉVITE LE DIVE\", \"Reste hors du passage de Gémellia\", \"TWISTER au passage du dive\", 88, duration + 300)\nelseif id == 9897 or id == 9941 then\n    if eventArgs.targetID == p.id then\n        s.put(\"buster\", \"TANKBUSTER SUR TOI\", \"Prépare ta mitigation ; reste séparé du groupe\", nil, 86, duration + 300, \"Tankbuster\")\n    elseif s.tank(p) then\n        s.put(\"buster\", \"TANKBUSTER — AUTRE TANK\", \"Prépare l'échange prévu par votre stratégie\", nil, 50, duration + 300)\n    end\nelseif id == 9911 or id == 9912 then\n    if s.phase < 3 then s.phase = 2 end\n    s.put(\"recul\", \"PRÉPARE LE RECUL\", \"Ajuste ton placement avant l'impact\", \"Évite les zones au sol\", 68, duration + 300)\nelseif id == 9953 or id == 9923 then\n    s.put(\"dive\", \"ÉVITE LE DIVE\", \"Sors de l'axe de la charge\", nil, 78, duration + 300)\nelseif id == 9942 then\n    s.phase = 3\n    s.put(\"raidwide\", \"GIGAFLARE — DÉGÂTS DE GROUPE\", \"Prépare les soins et mitigations prévus\", nil, 40, duration + 300)\nelseif id == 9905 then\n    s.put(\"abri\", \"ABRI — NEUROLIEN\", \"Rejoins le neurolien prévu pour ton groupe\", \"Reste jusqu'à la résolution\", 85, duration + 200, \"Neurolien\")\nelseif id == 9915 or id == 9916 or id == 9917 or id == 9918 or id == 9920 or id == 9921 then\n    if s.phase < 3 then s.phase = 2 end\n    local q = data.ucob_nael_calls\n    if not q or not q.hudUntil or q.hudUntil < now then\n        local title, detail\n        if id == 9915 then title, detail = \"OUT — ÉLOIGNE-TOI\", \"Sors de la zone autour de Nael\"\n        elseif id == 9916 then title, detail = \"IN — SOUS NAEL\", \"Rejoins l'intérieur du donut\"\n        elseif id == 9917 then title, detail = \"STACK — REGROUPEMENT\", \"Rejoins le partage ; garde la foudre à l'écart\"\n        elseif id == 9921 then\n            title = eventArgs.targetID == p.id and \"TANK — ISOLE-TOI\" or \"ÉCARTE-TOI DU TANK\"\n            detail = \"Laisse la zone du Dalamud Dive libre\"\n        else title, detail = \"SPREAD — ÉCARTEZ-VOUS\", \"Garde ton espace personnel\" end\n        s.put(\"castMove\", title, detail, nil, 80, duration + 300)\n    end\nend\nself.used = true\n",
+							actionLua = "\nif not data.ucob_guide then\n    local g = { cues = {}, seen = {}, phase = 1, serial = 0, slotLayout = \"LR\", slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}, stacks = {}, shakers = {}, octet = {}, hatch = {} }\n    data.ucob_guide = g\n    data.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\n    function g.put(key, title, detail, nextText, priority, ttl, voice)\n        local now = Now()\n        local c = g.cues[key]\n        if not c then c = {}; g.cues[key] = c end\n        if c.title ~= title or not c.expires or c.expires <= now then\n            g.serial = g.serial + 1\n            c.serial = g.serial\n            c.born = now\n            c.spoken = false\n        end\n        c.title = title\n        c.detail = detail\n        c.nextText = nextText\n        c.priority = priority or 50\n        c.expires = now + ttl\n        c.voice = voice\n        return c\n    end\n    function g.drop(key)\n        local c = g.cues[key]\n        if c then c.expires = 0 end\n    end\n    function g.clear()\n        for _, c in pairs(g.cues) do c.expires = 0 end\n        for k in pairs(g.stacks) do g.stacks[k] = nil end\n        for k in pairs(g.shakers) do g.shakers[k] = nil end\n        for k in pairs(g.octet) do g.octet[k] = nil end\n        for k in pairs(g.hatch) do g.hatch[k] = nil end\n        g.stackCount, g.shakerCount = 0, 0\n        g.octetCount, g.shakerWave = 0, 0\n        g.shakerFirstMine = nil\n        g.mineStack, g.markerExpires, g.hatchExpires, g.octetMine = nil, nil, nil, nil\n    end\n    function g.tank(p)\n        return p.job == 19 or p.job == 21 or p.job == 32 or p.job == 37\n    end\n    function g.healer(p)\n        return p.job == 24 or p.job == 28 or p.job == 33 or p.job == 40\n    end\n    function g.select(now)\n        local best\n        for _, c in pairs(g.cues) do\n            if c.expires > now and (not best or c.priority > best.priority or\n                (c.priority == best.priority and c.serial > best.serial)) then best = c end\n        end\n        g.best = best\n        return best\n    end\n    function g.once(key, hold)\n        local now = Now()\n        if g.seen[key] and now - g.seen[key] < hold then return false end\n        g.seen[key] = now\n        return true\n    end\nend\nlocal s = data.ucob_guide\nif s.slotLayout ~= \"LR\" then\n    s.slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}\n    s.slotLayout = \"LR\"\nend\ndata.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\nif data.ucob_guide_settings.slotLayout ~= \"LR\" then\n    data.ucob_guide_settings.slot = 0\n    data.ucob_guide_settings.slotLayout = \"LR\"\nend\n\nlocal p = TensorCore.mGetPlayer()\nif not p then self.used = true return end\nlocal id = eventArgs.spellID\nlocal duration = math.max(300, (eventArgs.channelTimeMax or 0) * 1000)\nlocal now = Now()\nif id >= 9954 and id <= 9959 then\n    s.clear()\n    data.ucob_fireball_guide = nil\n    data.ucob_twister_until = nil\n    s.phase, s.trio = 3, id\n    local names = {[9954]=\"QUICKMARCH\", [9955]=\"BLACKFIRE\", [9956]=\"FELLRUIN\", [9957]=\"HEAVENSFALL\", [9958]=\"TENSTRIKE\", [9959]=\"GRAND OCTET\"}\n    s.put(\"trio\", names[id], \"Prépare ton placement de départ\", nil, 35, duration + 2000)\nelseif id == 9898 then\n    s.twintaniaID = eventArgs.entityID\n    -- Ground effects can arrive after the cast event; keep a short placement margin.\n    data.ucob_twister_until = now + duration + 900\n    local nextText = data.ucob_fireball_guide and \"Ensuite : PARTAGE BOULE DE FEU\" or \"Évite les tornades laissées au sol\"\n    s.put(\"twister\", \"BOUGE — TWISTER\", \"Petit déplacement continu ; évite de revenir sur tes pas\", nextText, 100, duration + 900, \"Twister, bouge\")\nelseif id == 9906 then\n    s.put(\"dive\", \"ÉVITE LE DIVE\", \"Reste hors du passage de Gémellia\", \"TWISTER au passage du dive\", 88, duration + 300)\nelseif id == 9897 or id == 9941 then\n    if eventArgs.targetID == p.id then\n        s.put(\"buster\", \"TANKBUSTER SUR TOI\", \"Prépare ta mitigation ; reste séparé du groupe\", nil, 86, duration + 300, \"Tankbuster\")\n    elseif s.tank(p) then\n        s.put(\"buster\", \"TANKBUSTER — AUTRE TANK\", \"Prépare l'échange prévu par votre stratégie\", nil, 50, duration + 300)\n    end\nelseif id == 9911 or id == 9912 then\n    if s.phase < 3 then s.phase = 2 end\n    s.put(\"recul\", \"PRÉPARE LE RECUL\", \"Ajuste ton placement avant l'impact\", \"Évite les zones au sol\", 68, duration + 300)\nelseif id == 9953 or id == 9923 then\n    s.put(\"dive\", \"ÉVITE LE DIVE\", \"Sors de l'axe de la charge\", nil, 78, duration + 300)\nelseif id == 9942 then\n    s.phase = 3\n    s.put(\"raidwide\", \"GIGAFLARE — DÉGÂTS DE GROUPE\", \"Prépare les soins et mitigations prévus\", nil, 40, duration + 300)\nelseif id == 9905 then\n    s.put(\"abri\", \"ABRI — NEUROLIEN\", \"Rejoins le neurolien prévu pour ton groupe\", \"Reste jusqu'à la résolution\", 85, duration + 200, \"Neurolien\")\nelseif id == 9915 or id == 9916 or id == 9917 or id == 9918 or id == 9920 or id == 9921 then\n    if s.phase < 3 then s.phase = 2 end\n    local q = data.ucob_nael_calls\n    if not q or not q.hudUntil or q.hudUntil < now then\n        local title, detail\n        if id == 9915 then title, detail = \"OUT — ÉLOIGNE-TOI\", \"Sors de la zone autour de Nael\"\n        elseif id == 9916 then title, detail = \"IN — SOUS NAEL\", \"Rejoins l'intérieur du donut\"\n        elseif id == 9917 then title, detail = \"STACK — REGROUPEMENT\", \"Rejoins le partage ; garde la foudre à l'écart\"\n        elseif id == 9921 then\n            title = eventArgs.targetID == p.id and \"TANK — ISOLE-TOI\" or \"ÉCARTE-TOI DU TANK\"\n            detail = \"Laisse la zone du Dalamud Dive libre\"\n        else title, detail = \"SPREAD — ÉCARTEZ-VOUS\", \"Garde ton espace personnel\" end\n        s.put(\"castMove\", title, detail, nil, 80, duration + 300)\n    end\nend\nself.used = true\n",
 							conditions = 
 							{
 								
@@ -150,7 +150,7 @@ local tbl =
 						data = 
 						{
 							aType = "Lua",
-							actionLua = "\nif not data.ucob_guide then\n    local g = { cues = {}, seen = {}, phase = 1, serial = 0, slotLayout = \"LR\", slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}, stacks = {}, shakers = {}, octet = {}, hatch = {} }\n    data.ucob_guide = g\n    data.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\n    function g.put(key, title, detail, nextText, priority, ttl, voice)\n        local now = Now()\n        local c = g.cues[key]\n        if not c then c = {}; g.cues[key] = c end\n        if c.title ~= title or not c.expires or c.expires <= now then\n            g.serial = g.serial + 1\n            c.serial = g.serial\n            c.born = now\n            c.spoken = false\n        end\n        c.title = title\n        c.detail = detail\n        c.nextText = nextText\n        c.priority = priority or 50\n        c.expires = now + ttl\n        c.voice = voice\n        return c\n    end\n    function g.drop(key)\n        local c = g.cues[key]\n        if c then c.expires = 0 end\n    end\n    function g.clear()\n        for _, c in pairs(g.cues) do c.expires = 0 end\n        for k in pairs(g.stacks) do g.stacks[k] = nil end\n        for k in pairs(g.shakers) do g.shakers[k] = nil end\n        for k in pairs(g.octet) do g.octet[k] = nil end\n        for k in pairs(g.hatch) do g.hatch[k] = nil end\n        g.stackCount, g.shakerCount = 0, 0\n        g.octetCount, g.shakerWave = 0, 0\n        g.shakerFirstMine = nil\n        g.mineStack, g.markerExpires, g.hatchExpires, g.octetMine = nil, nil, nil, nil\n    end\n    function g.tank(p)\n        return p.job == 19 or p.job == 21 or p.job == 32 or p.job == 37\n    end\n    function g.healer(p)\n        return p.job == 24 or p.job == 28 or p.job == 33 or p.job == 40\n    end\n    function g.select(now)\n        local best\n        for _, c in pairs(g.cues) do\n            if c.expires > now and (not best or c.priority > best.priority or\n                (c.priority == best.priority and c.serial > best.serial)) then best = c end\n        end\n        g.best = best\n        return best\n    end\n    function g.once(key, hold)\n        local now = Now()\n        if g.seen[key] and now - g.seen[key] < hold then return false end\n        g.seen[key] = now\n        return true\n    end\nend\nlocal s = data.ucob_guide\nif s.slotLayout ~= \"LR\" then\n    s.slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}\n    s.slotLayout = \"LR\"\nend\ndata.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\nif data.ucob_guide_settings.slotLayout ~= \"LR\" then\n    data.ucob_guide_settings.slot = 0\n    data.ucob_guide_settings.slotLayout = \"LR\"\nend\n\nlocal p = TensorCore.mGetPlayer()\nif not p then self.used = true return end\nlocal id, now = eventArgs.spellID, Now()\nif id == 9903 then\n    for _, hit in ipairs(eventArgs.hitTargets) do\n        if hit == p.id then s.drop(\"hatch\"); s.hatchExpires = nil end\n    end\n    self.used = true return\nend\nif not s.once(\"cast\"..id, 400) then self.used = true return end\nif id == 9898 then\n    s.drop(\"twister\")\n    s.put(\"twisterDone\", \"TWISTERS POSÉS\", \"Évite les tornades ; reprends ton placement\", nil, 30, 2000)\nelseif id == 9906 then\n    s.drop(\"dive\")\n    s.put(\"twister\", \"BOUGE — TWISTER\", \"Déplace-toi après le dive ; ne reviens pas sur tes pas\", nil, 100, 2200, \"Twister, bouge\")\nelseif id == 9900 then s.drop(\"fireball\")\nelseif id == 9897 or id == 9941 then s.drop(\"buster\"); s.drop(\"tankPrep\")\nelseif id == 9915 or id == 9916 or id == 9917 or id == 9918 or id == 9920 or id == 9921 then\n    s.drop(\"castMove\")\nelseif id == 9911 or id == 9912 then\n    s.drop(\"recul\")\n    s.put(\"reculDone\", \"ÉVITE LES ZONES AU SOL\", \"Reprends ton placement après le recul\", nil, 45, 2500)\nelseif id == 9940 then\n    s.phase = 3\n    s.breathCount = (s.breathCount or 0) + 1\nelseif id == 9942 then s.drop(\"raidwide\"); s.drop(\"raidPrep\")\nelseif id == 9948 then s.drop(\"spreadPrep\")\nelseif id == 9949 then s.drop(\"groundPrep\")\nelseif id == 9950 then s.drop(\"stackPrep\"); s.drop(\"assignment\")\nelseif id == 9951 then s.drop(\"towerPrep\")\nelseif id == 9945 then\n    if s.trio == 9958 and s.shakerFirstMine == false and (s.shakerWave or 0) == 1 then\n        s.put(\"shaker\", \"DEUXIÈME VAGUE — PRENDS TON SECTEUR\", \"La première vague vient de passer\", nil, 94, 5000, \"Deuxième vague\")\n    else s.drop(\"shaker\") end\nelseif id == 9943 then s.drop(\"tetherPrep\")\nelseif id == 9905 then\n    s.drop(\"abri\"); s.drop(\"shelterPrep\")\n    if s.trio == 9956 then s.put(\"spreadPrep\", \"SPREAD — SORS DU GROUPE\", \"Prépare Meteor Stream\", nil, 82, 3300) end\nelseif id == 9901 then\n    if not s.liquidAt or now - s.liquidAt > 6000 then s.liquidCount = 0 end\n    s.liquidAt = now\n    s.liquidCount = math.min(5, (s.liquidCount or 0) + 1)\n    s.put(\"liquid\", \"LIQUID HELL — \" .. s.liquidCount .. \"/5\", \"Le joueur chargé du bait continue ; garde les flaques hors du groupe\", nil, 45, 2200)\nend\nself.used = true\n",
+							actionLua = "\nif not data.ucob_guide then\n    local g = { cues = {}, seen = {}, phase = 1, serial = 0, slotLayout = \"LR\", slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}, stacks = {}, shakers = {}, octet = {}, hatch = {} }\n    data.ucob_guide = g\n    data.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\n    function g.put(key, title, detail, nextText, priority, ttl, voice)\n        local now = Now()\n        local c = g.cues[key]\n        if not c then c = {}; g.cues[key] = c end\n        if c.title ~= title or not c.expires or c.expires <= now then\n            g.serial = g.serial + 1\n            c.serial = g.serial\n            c.born = now\n            c.spoken = false\n        end\n        c.title = title\n        c.detail = detail\n        c.nextText = nextText\n        c.priority = priority or 50\n        c.expires = now + ttl\n        c.voice = voice\n        return c\n    end\n    function g.drop(key)\n        local c = g.cues[key]\n        if c then c.expires = 0 end\n    end\n    function g.clear()\n        for _, c in pairs(g.cues) do c.expires = 0 end\n        for k in pairs(g.stacks) do g.stacks[k] = nil end\n        for k in pairs(g.shakers) do g.shakers[k] = nil end\n        for k in pairs(g.octet) do g.octet[k] = nil end\n        for k in pairs(g.hatch) do g.hatch[k] = nil end\n        g.stackCount, g.shakerCount = 0, 0\n        g.octetCount, g.shakerWave = 0, 0\n        g.shakerFirstMine = nil\n        g.mineStack, g.markerExpires, g.hatchExpires, g.octetMine = nil, nil, nil, nil\n    end\n    function g.tank(p)\n        return p.job == 19 or p.job == 21 or p.job == 32 or p.job == 37\n    end\n    function g.healer(p)\n        return p.job == 24 or p.job == 28 or p.job == 33 or p.job == 40\n    end\n    function g.select(now)\n        local best\n        for _, c in pairs(g.cues) do\n            if c.expires > now and (not best or c.priority > best.priority or\n                (c.priority == best.priority and c.serial > best.serial)) then best = c end\n        end\n        g.best = best\n        return best\n    end\n    function g.once(key, hold)\n        local now = Now()\n        if g.seen[key] and now - g.seen[key] < hold then return false end\n        g.seen[key] = now\n        return true\n    end\nend\nlocal s = data.ucob_guide\nif s.slotLayout ~= \"LR\" then\n    s.slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}\n    s.slotLayout = \"LR\"\nend\ndata.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\nif data.ucob_guide_settings.slotLayout ~= \"LR\" then\n    data.ucob_guide_settings.slot = 0\n    data.ucob_guide_settings.slotLayout = \"LR\"\nend\n\nlocal p = TensorCore.mGetPlayer()\nif not p then self.used = true return end\nlocal id, now = eventArgs.spellID, Now()\nif id == 9903 then\n    for _, hit in ipairs(eventArgs.hitTargets) do\n        if hit == p.id then s.drop(\"hatch\"); s.hatchExpires = nil end\n    end\n    self.used = true return\nend\nif not s.once(\"cast\"..id, 400) then self.used = true return end\nif id == 9898 then\n    data.ucob_twister_until = math.max(data.ucob_twister_until or 0, now + 650)\n    local nextText = data.ucob_fireball_guide and \"Ensuite : PARTAGE BOULE DE FEU\" or \"Évite les tornades laissées au sol\"\n    s.put(\"twister\", \"BOUGE — TWISTER\", \"Termine ton déplacement ; ne reviens pas sur tes pas\", nextText, 100, data.ucob_twister_until - now)\n    s.put(\"twisterDone\", \"TWISTERS POSÉS\", \"Évite les tornades ; reprends ton placement\", nil, 30, 2000)\nelseif id == 9906 then\n    s.drop(\"dive\")\n    data.ucob_twister_until = now + 2200\n    s.put(\"twister\", \"BOUGE — TWISTER\", \"Déplace-toi après le dive ; ne reviens pas sur tes pas\", nil, 100, 2200, \"Twister, bouge\")\nelseif id == 9900 then\n    s.drop(\"fireball\")\n    data.ucob_fireball_guide = nil\nelseif id == 9897 or id == 9941 then s.drop(\"buster\"); s.drop(\"tankPrep\")\nelseif id == 9915 or id == 9916 or id == 9917 or id == 9918 or id == 9920 or id == 9921 then\n    s.drop(\"castMove\")\nelseif id == 9911 or id == 9912 then\n    s.drop(\"recul\")\n    s.put(\"reculDone\", \"ÉVITE LES ZONES AU SOL\", \"Reprends ton placement après le recul\", nil, 45, 2500)\nelseif id == 9940 then\n    s.phase = 3\n    s.breathCount = (s.breathCount or 0) + 1\nelseif id == 9942 then s.drop(\"raidwide\"); s.drop(\"raidPrep\")\nelseif id == 9948 then s.drop(\"spreadPrep\")\nelseif id == 9949 then s.drop(\"groundPrep\")\nelseif id == 9950 then s.drop(\"stackPrep\"); s.drop(\"assignment\")\nelseif id == 9951 then s.drop(\"towerPrep\")\nelseif id == 9945 then\n    if s.trio == 9958 and s.shakerFirstMine == false and (s.shakerWave or 0) == 1 then\n        s.put(\"shaker\", \"DEUXIÈME VAGUE — PRENDS TON SECTEUR\", \"La première vague vient de passer\", nil, 94, 5000, \"Deuxième vague\")\n    else s.drop(\"shaker\") end\nelseif id == 9943 then s.drop(\"tetherPrep\")\nelseif id == 9905 then\n    s.drop(\"abri\"); s.drop(\"shelterPrep\")\n    if s.trio == 9956 then s.put(\"spreadPrep\", \"SPREAD — SORS DU GROUPE\", \"Prépare Meteor Stream\", nil, 82, 3300) end\nelseif id == 9901 then\n    if not s.liquidAt or now - s.liquidAt > 6000 then s.liquidCount = 0 end\n    s.liquidAt = now\n    s.liquidCount = math.min(5, (s.liquidCount or 0) + 1)\n    s.put(\"liquid\", \"LIQUID HELL — \" .. s.liquidCount .. \"/5\", \"Le joueur chargé du bait continue ; garde les flaques hors du groupe\", nil, 45, 2200)\nend\nself.used = true\n",
 							conditions = 
 							{
 								
@@ -232,7 +232,7 @@ local tbl =
 						data = 
 						{
 							aType = "Lua",
-							actionLua = "\nif not data.ucob_guide then\n    local g = { cues = {}, seen = {}, phase = 1, serial = 0, slotLayout = \"LR\", slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}, stacks = {}, shakers = {}, octet = {}, hatch = {} }\n    data.ucob_guide = g\n    data.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\n    function g.put(key, title, detail, nextText, priority, ttl, voice)\n        local now = Now()\n        local c = g.cues[key]\n        if not c then c = {}; g.cues[key] = c end\n        if c.title ~= title or not c.expires or c.expires <= now then\n            g.serial = g.serial + 1\n            c.serial = g.serial\n            c.born = now\n            c.spoken = false\n        end\n        c.title = title\n        c.detail = detail\n        c.nextText = nextText\n        c.priority = priority or 50\n        c.expires = now + ttl\n        c.voice = voice\n        return c\n    end\n    function g.drop(key)\n        local c = g.cues[key]\n        if c then c.expires = 0 end\n    end\n    function g.clear()\n        for _, c in pairs(g.cues) do c.expires = 0 end\n        for k in pairs(g.stacks) do g.stacks[k] = nil end\n        for k in pairs(g.shakers) do g.shakers[k] = nil end\n        for k in pairs(g.octet) do g.octet[k] = nil end\n        for k in pairs(g.hatch) do g.hatch[k] = nil end\n        g.stackCount, g.shakerCount = 0, 0\n        g.octetCount, g.shakerWave = 0, 0\n        g.shakerFirstMine = nil\n        g.mineStack, g.markerExpires, g.hatchExpires, g.octetMine = nil, nil, nil, nil\n    end\n    function g.tank(p)\n        return p.job == 19 or p.job == 21 or p.job == 32 or p.job == 37\n    end\n    function g.healer(p)\n        return p.job == 24 or p.job == 28 or p.job == 33 or p.job == 40\n    end\n    function g.select(now)\n        local best\n        for _, c in pairs(g.cues) do\n            if c.expires > now and (not best or c.priority > best.priority or\n                (c.priority == best.priority and c.serial > best.serial)) then best = c end\n        end\n        g.best = best\n        return best\n    end\n    function g.once(key, hold)\n        local now = Now()\n        if g.seen[key] and now - g.seen[key] < hold then return false end\n        g.seen[key] = now\n        return true\n    end\nend\nlocal s = data.ucob_guide\nif s.slotLayout ~= \"LR\" then\n    s.slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}\n    s.slotLayout = \"LR\"\nend\ndata.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\nif data.ucob_guide_settings.slotLayout ~= \"LR\" then\n    data.ucob_guide_settings.slot = 0\n    data.ucob_guide_settings.slotLayout = \"LR\"\nend\n\nlocal p = TensorCore.mGetPlayer()\nif not p or not p.alive then self.used = true return end\nlocal id, target, now = eventArgs.markerID, eventArgs.entityID, Now()\nif id == 117 then\n    s.put(\"fireball\", target == p.id and \"FIREBALL SUR TOI — PARTAGE\" or \"FIREBALL — PARTAGE PRÉVU\", \"Rejoins ton groupe de partage selon ton poste\", nil, 65, 10000)\nelseif id == 118 then\n    if not s.hatch[target] then s.hatch[target] = true end\n    if target == p.id then\n        s.hatchExpires = now + 12000\n        s.put(\"hatch\", \"HATCH SUR TOI — NEUROLIEN\", \"Utilise ton neurolien attribué ; ne traverse pas les autres porteurs\", nil, 94, 12000, \"Hatch sur toi\")\n    end\nelseif id == 39 then\n    if not s.stacks[target] then\n        s.stacks[target] = true\n        s.stackCount = (s.stackCount or 0) + 1\n    end\n    s.markerExpires = now + 18000\n    if target == p.id then s.mineStack = true end\n    if s.trio == 9955 then\n        if s.mineStack then\n            s.put(\"assignment\", \"TON RÔLE : STACK\", \"Termine le bait avant de rejoindre le partage\", \"STACK après les Hypernovas\", 42, 12000)\n        elseif s.stackCount == 4 then\n            s.put(\"assignment\", \"TON RÔLE : TOUR\", \"Termine le bait avant d'entrer dans ta tour\", \"TOUR après le partage\", 42, 12000)\n        end\n    end\nelseif id == 40 then\n    if not s.shakerMarkAt or now - s.shakerMarkAt > 2500 then\n        for k in pairs(s.shakers) do s.shakers[k] = nil end\n        s.shakerCount = 0\n        s.shakerWave = (s.shakerWave or 0) + 1\n        s.shakerMarkAt = now\n    end\n    if not s.shakers[target] then s.shakers[target] = true; s.shakerCount = s.shakerCount + 1 end\n    if target == p.id then\n        if s.shakerWave == 1 then s.shakerFirstMine = true end\n        s.put(\"shaker\", \"EARTHSHAKER SUR TOI — ÉCARTE-TOI\", \"Oriente ta secousse hors du groupe, vers ton secteur\", nil, 96, 6500, \"Secousse sur toi\")\n    elseif s.trio == 9958 and s.shakerWave == 1 and s.shakerCount == 4 and not s.shakers[p.id] then\n        s.shakerFirstMine = false\n        s.put(\"assignment\", \"EARTHSHAKER : DEUXIÈME VAGUE\", \"Attends la première vague avant de prendre ton secteur\", nil, 45, 11000)\n    end\nelseif s.trio == 9959 and (id == 119 or id == 20 or id == 41 or id == 42) then\n    if not s.octet[target] then s.octet[target] = true; s.octetCount = (s.octetCount or 0) + 1 end\n    if target == p.id then\n        s.octetMine = true\n        local dragon = id == 119 and \"NAEL\" or id == 41 and \"BAHAMUT\" or id == 42 and \"GÉMELLIA\" or \"DRAGON\"\n        local detail = id == 42 and \"Isole le dernier dive du partage selon votre placement\" or \"Dépose la charge avec le groupe, puis poursuis la rotation prévue\"\n        s.put(\"octetBait\", dragon .. \" SUR TOI — BAIT\", detail, id == 42 and \"Puis BOUGE pour Twister\" or nil, 90, 5000, \"Dive sur toi\")\n    elseif id == 41 then\n        s.octetCheckAt = now + 700\n    end\nend\nself.used = true\n",
+							actionLua = "\nif not data.ucob_guide then\n    local g = { cues = {}, seen = {}, phase = 1, serial = 0, slotLayout = \"LR\", slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}, stacks = {}, shakers = {}, octet = {}, hatch = {} }\n    data.ucob_guide = g\n    data.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\n    function g.put(key, title, detail, nextText, priority, ttl, voice)\n        local now = Now()\n        local c = g.cues[key]\n        if not c then c = {}; g.cues[key] = c end\n        if c.title ~= title or not c.expires or c.expires <= now then\n            g.serial = g.serial + 1\n            c.serial = g.serial\n            c.born = now\n            c.spoken = false\n        end\n        c.title = title\n        c.detail = detail\n        c.nextText = nextText\n        c.priority = priority or 50\n        c.expires = now + ttl\n        c.voice = voice\n        return c\n    end\n    function g.drop(key)\n        local c = g.cues[key]\n        if c then c.expires = 0 end\n    end\n    function g.clear()\n        for _, c in pairs(g.cues) do c.expires = 0 end\n        for k in pairs(g.stacks) do g.stacks[k] = nil end\n        for k in pairs(g.shakers) do g.shakers[k] = nil end\n        for k in pairs(g.octet) do g.octet[k] = nil end\n        for k in pairs(g.hatch) do g.hatch[k] = nil end\n        g.stackCount, g.shakerCount = 0, 0\n        g.octetCount, g.shakerWave = 0, 0\n        g.shakerFirstMine = nil\n        g.mineStack, g.markerExpires, g.hatchExpires, g.octetMine = nil, nil, nil, nil\n    end\n    function g.tank(p)\n        return p.job == 19 or p.job == 21 or p.job == 32 or p.job == 37\n    end\n    function g.healer(p)\n        return p.job == 24 or p.job == 28 or p.job == 33 or p.job == 40\n    end\n    function g.select(now)\n        local best\n        for _, c in pairs(g.cues) do\n            if c.expires > now and (not best or c.priority > best.priority or\n                (c.priority == best.priority and c.serial > best.serial)) then best = c end\n        end\n        g.best = best\n        return best\n    end\n    function g.once(key, hold)\n        local now = Now()\n        if g.seen[key] and now - g.seen[key] < hold then return false end\n        g.seen[key] = now\n        return true\n    end\nend\nlocal s = data.ucob_guide\nif s.slotLayout ~= \"LR\" then\n    s.slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}\n    s.slotLayout = \"LR\"\nend\ndata.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\nif data.ucob_guide_settings.slotLayout ~= \"LR\" then\n    data.ucob_guide_settings.slot = 0\n    data.ucob_guide_settings.slotLayout = \"LR\"\nend\n\nlocal p = TensorCore.mGetPlayer()\nif not p or not p.alive then self.used = true return end\nlocal id, target, now = eventArgs.markerID, eventArgs.entityID, Now()\nif id == 117 then\n    local f = data.ucob_fireball_guide\n    if f and f.target == target and now - f.started < 1000 then self.used = true return end\n    if not f then f = {}; data.ucob_fireball_guide = f end\n    f.target, f.started, f.expires = target, now, now + 10000\n    -- The marker may precede the Twister cast by a fraction of a second.\n    f.holdUntil, f.nextCount, f.voiceDone = now + 500, 0, false\n    f.count, f.partyCount, f.countText = nil, nil, nil\n    s.drop(\"fireball\")\nelseif id == 118 then\n    if not s.hatch[target] then s.hatch[target] = true end\n    if target == p.id then\n        s.hatchExpires = now + 12000\n        s.put(\"hatch\", \"HATCH SUR TOI — NEUROLIEN\", \"Utilise ton neurolien attribué ; ne traverse pas les autres porteurs\", nil, 94, 12000, \"Hatch sur toi\")\n    end\nelseif id == 39 then\n    if not s.stacks[target] then\n        s.stacks[target] = true\n        s.stackCount = (s.stackCount or 0) + 1\n    end\n    s.markerExpires = now + 18000\n    if target == p.id then s.mineStack = true end\n    if s.trio == 9955 then\n        if s.mineStack then\n            s.put(\"assignment\", \"TON RÔLE : STACK\", \"Termine le bait avant de rejoindre le partage\", \"STACK après les Hypernovas\", 42, 12000)\n        elseif s.stackCount == 4 then\n            s.put(\"assignment\", \"TON RÔLE : TOUR\", \"Termine le bait avant d'entrer dans ta tour\", \"TOUR après le partage\", 42, 12000)\n        end\n    end\nelseif id == 40 then\n    if not s.shakerMarkAt or now - s.shakerMarkAt > 2500 then\n        for k in pairs(s.shakers) do s.shakers[k] = nil end\n        s.shakerCount = 0\n        s.shakerWave = (s.shakerWave or 0) + 1\n        s.shakerMarkAt = now\n    end\n    if not s.shakers[target] then s.shakers[target] = true; s.shakerCount = s.shakerCount + 1 end\n    if target == p.id then\n        if s.shakerWave == 1 then s.shakerFirstMine = true end\n        s.put(\"shaker\", \"EARTHSHAKER SUR TOI — ÉCARTE-TOI\", \"Oriente ta secousse hors du groupe, vers ton secteur\", nil, 96, 6500, \"Secousse sur toi\")\n    elseif s.trio == 9958 and s.shakerWave == 1 and s.shakerCount == 4 and not s.shakers[p.id] then\n        s.shakerFirstMine = false\n        s.put(\"assignment\", \"EARTHSHAKER : DEUXIÈME VAGUE\", \"Attends la première vague avant de prendre ton secteur\", nil, 45, 11000)\n    end\nelseif s.trio == 9959 and (id == 119 or id == 20 or id == 41 or id == 42) then\n    if not s.octet[target] then s.octet[target] = true; s.octetCount = (s.octetCount or 0) + 1 end\n    if target == p.id then\n        s.octetMine = true\n        local dragon = id == 119 and \"NAEL\" or id == 41 and \"BAHAMUT\" or id == 42 and \"GÉMELLIA\" or \"DRAGON\"\n        local detail = id == 42 and \"Isole le dernier dive du partage selon votre placement\" or \"Dépose la charge avec le groupe, puis poursuis la rotation prévue\"\n        s.put(\"octetBait\", dragon .. \" SUR TOI — BAIT\", detail, id == 42 and \"Puis BOUGE pour Twister\" or nil, 90, 5000, \"Dive sur toi\")\n    elseif id == 41 then\n        s.octetCheckAt = now + 700\n    end\nend\nself.used = true\n",
 							conditions = 
 							{
 								
@@ -352,7 +352,7 @@ local tbl =
 				{
 				},
 				displayPath = "LPDU - Guide central",
-				execute = "\nif not data.ucob_guide then\n    local g = { cues = {}, seen = {}, phase = 1, serial = 0, slotLayout = \"LR\", slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}, stacks = {}, shakers = {}, octet = {}, hatch = {} }\n    data.ucob_guide = g\n    data.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\n    function g.put(key, title, detail, nextText, priority, ttl, voice)\n        local now = Now()\n        local c = g.cues[key]\n        if not c then c = {}; g.cues[key] = c end\n        if c.title ~= title or not c.expires or c.expires <= now then\n            g.serial = g.serial + 1\n            c.serial = g.serial\n            c.born = now\n            c.spoken = false\n        end\n        c.title = title\n        c.detail = detail\n        c.nextText = nextText\n        c.priority = priority or 50\n        c.expires = now + ttl\n        c.voice = voice\n        return c\n    end\n    function g.drop(key)\n        local c = g.cues[key]\n        if c then c.expires = 0 end\n    end\n    function g.clear()\n        for _, c in pairs(g.cues) do c.expires = 0 end\n        for k in pairs(g.stacks) do g.stacks[k] = nil end\n        for k in pairs(g.shakers) do g.shakers[k] = nil end\n        for k in pairs(g.octet) do g.octet[k] = nil end\n        for k in pairs(g.hatch) do g.hatch[k] = nil end\n        g.stackCount, g.shakerCount = 0, 0\n        g.octetCount, g.shakerWave = 0, 0\n        g.shakerFirstMine = nil\n        g.mineStack, g.markerExpires, g.hatchExpires, g.octetMine = nil, nil, nil, nil\n    end\n    function g.tank(p)\n        return p.job == 19 or p.job == 21 or p.job == 32 or p.job == 37\n    end\n    function g.healer(p)\n        return p.job == 24 or p.job == 28 or p.job == 33 or p.job == 40\n    end\n    function g.select(now)\n        local best\n        for _, c in pairs(g.cues) do\n            if c.expires > now and (not best or c.priority > best.priority or\n                (c.priority == best.priority and c.serial > best.serial)) then best = c end\n        end\n        g.best = best\n        return best\n    end\n    function g.once(key, hold)\n        local now = Now()\n        if g.seen[key] and now - g.seen[key] < hold then return false end\n        g.seen[key] = now\n        return true\n    end\nend\nlocal s = data.ucob_guide\nif s.slotLayout ~= \"LR\" then\n    s.slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}\n    s.slotLayout = \"LR\"\nend\ndata.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\nif data.ucob_guide_settings.slotLayout ~= \"LR\" then\n    data.ucob_guide_settings.slot = 0\n    data.ucob_guide_settings.slotLayout = \"LR\"\nend\n\nlocal p = TensorCore.mGetPlayer()\nif not p then self.used = true return end\nlocal now = Now()\nif not p.alive or p.hp.current <= 0 then s.clear(); s.best = nil; self.used = true return end\n\nif s.phase == 1 and s.twintaniaID and s.tank(p) then\n    local boss = TensorCore.mGetEntity(s.twintaniaID)\n    if boss and boss.alive and boss.targetid == p.id then\n        local count=0\n        if data.ucob_nearest_links then\n            for id in pairs(data.ucob_nearest_links) do\n                local link=TensorCore.mGetEntity(id)\n                if link and link.contentid == 2001151 then count=count+1 end\n            end\n        end\n        local percent=boss.hp.percent\n        if (count==0 and percent<=78 and percent>0) or (count==1 and percent<=48 and percent>0) or (count==2 and percent<=3 and percent>0) then\n            s.put(\"neuroDrop\", \"NEUROLIEN \"..(count+1)..\" — PLACE LE BOSS\", \"Garde Gémellia sur le point de dépôt LPDU prévu\", nil, 55, 350)\n        else s.drop(\"neuroDrop\") end\n    else s.drop(\"neuroDrop\") end\nelse s.drop(\"neuroDrop\") end\nlocal thunder = TensorCore.getBuff(p, 466)\nif thunder and thunder.duration > 0 then\n    s.put(\"thunder\", \"FOUDRE SUR TOI — ÉCARTE-TOI\", string.format(\"Explosion dans %.1f s · reste hors du groupe\", thunder.duration), nil, 105, 350)\nelse s.drop(\"thunder\") end\nlocal doom = TensorCore.getBuff(p, 210)\nlocal d = data.ucob_doom_hud\nif doom and doom.duration > 0 then\n    local title = d and d.order and (\"GLAS \" .. d.order .. \" — PURIFIE-TOI\") or \"GLAS — PURIFIE-TOI\"\n    local detail = d and d.position and \"Rejoins la flaque indiquée\" or \"Attends ta flaque de purification\"\n    s.put(\"doom\", title, string.format(\"%.1f s · \", doom.duration) .. detail, nil, doom.duration <= 3 and 104 or 92, 350)\nelse s.drop(\"doom\") end\nlocal q = data.ucob_nael_calls\nif q and q.current and q.hudUntil and now < q.hudUntil then\n    if not s.words then\n        s.words = {IN=\"IN — SOUS NAEL\", OUT=\"OUT — ÉLOIGNE-TOI\", STACK=\"STACK — REGROUPEMENT\", SPREAD=\"SPREAD — ÉCARTEZ-VOUS\", TANK=\"TANK À L'ÉCART\"}\n    end\n    local detail = q.current == \"TANK\" and (s.tank(p) and \"Isole le tank ciblé ; respecte la cible du dive\" or \"Laisse le tank ciblé seul\") or \"Change de consigne à la résolution de l'attaque\"\n    s.put(\"quote\", s.words[q.current] or q.current, detail, q.next and (\"Ensuite : \" .. (s.words[q.next] or q.next)) or nil, 82, math.min(350,q.hudUntil-now))\nelse s.drop(\"quote\") end\nlocal dive = data.ucob_p2_dive\nif dive and dive.hudVisible and dive.hudTitle and dive.hudStatus then\n    s.put(\"p2Dive\", dive.hudTitle, dive.hudStatus, dive.hudNote, 95, 350)\nelse s.drop(\"p2Dive\") end\nlocal fire = data.ucob_guide_fire\nif fire and fire.expires and now < fire.expires and fire.title then\n    s.put(\"p2Fire\", fire.title, fire.detail, nil, fire.priority or 75, math.min(350,fire.expires-now))\nelse s.drop(\"p2Fire\") end\nlocal route = data.ucob_path_preview\ns.routeDetail = route and route.active and route.pulse and now-route.pulse < 500 and route.status or nil\nlocal fix = data.ucobP3DrawFix\nif fix and fix.flareUUID and fix.flareExpires and now < fix.flareExpires then\n    s.put(\"cleave\", s.tank(p) and \"SOUFFLE — GARDE LE BOSS ORIENTÉ\" or \"CLEAVE — ÉVITE DEVANT BAHAMUT\", \"Le repère rouge indique la direction du souffle\", nil, 48, 350)\nelse s.drop(\"cleave\") end\nif s.octetCheckAt and now >= s.octetCheckAt then\n    s.octetCheckAt = nil\n    if s.octetCount == 7 and not s.octet[p.id] then\n        local party = TensorCore.getEntityGroupList(\"Party\")\n        local count, marked, valid = 0, 0, true\n        if party then\n            for _, member in pairs(party) do\n                count = count + 1\n                if not member.alive then valid = false end\n                if s.octet[member.id] then marked = marked + 1 end\n            end\n        end\n        if valid and count == 8 and marked == 7 then\n            s.put(\"octetLast\", \"SANS MARQUEUR — PRÉPARE GÉMELLIA\", \"Prépare le dernier bait selon le placement de votre groupe\", \"TWISTER après le passage\", 89, 11500, \"Tu prends Gémellia\")\n        end\n    end\nend\nlocal best = s.select(now)\nif best and best.voice and not best.spoken and data.ucob_guide_settings.voice then\n    if not s.lastVoice or now-s.lastVoice >= 900 then\n        TensorCore.sendTTS(best.voice, 85)\n        best.spoken, s.lastVoice = true, now\n    end\nend\nself.used = true\n",
+				execute = "\nif not data.ucob_guide then\n    local g = { cues = {}, seen = {}, phase = 1, serial = 0, slotLayout = \"LR\", slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}, stacks = {}, shakers = {}, octet = {}, hatch = {} }\n    data.ucob_guide = g\n    data.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\n    function g.put(key, title, detail, nextText, priority, ttl, voice)\n        local now = Now()\n        local c = g.cues[key]\n        if not c then c = {}; g.cues[key] = c end\n        if c.title ~= title or not c.expires or c.expires <= now then\n            g.serial = g.serial + 1\n            c.serial = g.serial\n            c.born = now\n            c.spoken = false\n        end\n        c.title = title\n        c.detail = detail\n        c.nextText = nextText\n        c.priority = priority or 50\n        c.expires = now + ttl\n        c.voice = voice\n        return c\n    end\n    function g.drop(key)\n        local c = g.cues[key]\n        if c then c.expires = 0 end\n    end\n    function g.clear()\n        for _, c in pairs(g.cues) do c.expires = 0 end\n        for k in pairs(g.stacks) do g.stacks[k] = nil end\n        for k in pairs(g.shakers) do g.shakers[k] = nil end\n        for k in pairs(g.octet) do g.octet[k] = nil end\n        for k in pairs(g.hatch) do g.hatch[k] = nil end\n        g.stackCount, g.shakerCount = 0, 0\n        g.octetCount, g.shakerWave = 0, 0\n        g.shakerFirstMine = nil\n        g.mineStack, g.markerExpires, g.hatchExpires, g.octetMine = nil, nil, nil, nil\n    end\n    function g.tank(p)\n        return p.job == 19 or p.job == 21 or p.job == 32 or p.job == 37\n    end\n    function g.healer(p)\n        return p.job == 24 or p.job == 28 or p.job == 33 or p.job == 40\n    end\n    function g.select(now)\n        local best\n        for _, c in pairs(g.cues) do\n            if c.expires > now and (not best or c.priority > best.priority or\n                (c.priority == best.priority and c.serial > best.serial)) then best = c end\n        end\n        g.best = best\n        return best\n    end\n    function g.once(key, hold)\n        local now = Now()\n        if g.seen[key] and now - g.seen[key] < hold then return false end\n        g.seen[key] = now\n        return true\n    end\nend\nlocal s = data.ucob_guide\nif s.slotLayout ~= \"LR\" then\n    s.slots = {\"Non attribué\", \"L1\", \"L2\", \"L3\", \"L4\", \"R1\", \"R2\", \"R3\", \"R4\"}\n    s.slotLayout = \"LR\"\nend\ndata.ucob_guide_settings = data.ucob_guide_settings or {slot = 0, voice = true}\nif data.ucob_guide_settings.slotLayout ~= \"LR\" then\n    data.ucob_guide_settings.slot = 0\n    data.ucob_guide_settings.slotLayout = \"LR\"\nend\n\nlocal p = TensorCore.mGetPlayer()\nif not p then self.used = true return end\nlocal now = Now()\nif not p.alive or p.hp.current <= 0 then\n    data.ucob_fireball_guide = nil\n    s.clear(); s.best = nil; self.used = true return\nend\n\n-- Count living party members at the existing 100ms guide cadence, never per frame.\nlocal f = data.ucob_fireball_guide\nif f and now < f.expires then\n    local target = TensorCore.mGetEntity(f.target)\n    if target and (not target.alive or target.hp.current <= 0) then\n        data.ucob_fireball_guide = nil\n        s.drop(\"fireball\")\n    else\n        if now >= f.nextCount then\n            f.nextCount = now + 100\n            f.count, f.partyCount = nil, 0\n            local party = target and TensorCore.getEntityGroupList(\"Party\")\n            if party and next(party) ~= nil then\n                f.count = 0\n                for _, member in pairs(party) do\n                    f.partyCount = f.partyCount + 1\n                    if member.alive and member.hp.current > 0 then\n                        local dx, dz = member.pos.x - target.pos.x, member.pos.z - target.pos.z\n                        if dx * dx + dz * dz <= 16 then f.count = f.count + 1 end\n                    end\n                end\n            end\n            if f.count then\n                f.countText = string.format(\"%d joueur%s vivant%s dans le cercle · cible comprise\", f.count, f.count == 1 and \"\" or \"s\", f.count == 1 and \"\" or \"s\")\n                if f.partyCount ~= 8 then f.countText = f.countText .. \" · groupe incomplet\" end\n            else\n                f.countText = \"Comptage indisponible\"\n            end\n        end\n        local twister = data.ucob_twister_until and now < data.ucob_twister_until\n        local waiting = twister or now < f.holdUntil or not target or not f.count\n        local mine = f.target == p.id\n        local instruction, voice\n        if twister then\n            instruction = \"TWISTER d'abord → PARTAGE ensuite\"\n            local cue = s.cues.twister\n            if cue and cue.expires > now then cue.nextText = \"Ensuite : PARTAGE BOULE DE FEU\" end\n        elseif now < f.holdUntil then\n            instruction = \"Repère la cible du partage\"\n        elseif not target then\n            instruction = \"Position de la cible indisponible\"\n        elseif mine and f.count == 1 then\n            instruction = \"Tu es seul : rejoins ton groupe de partage\"\n        else\n            instruction = mine and \"Rejoins ton groupe de partage\" or \"Rejoins le joueur indiqué en évitant les tornades\"\n        end\n        if not waiting and not f.voiceDone then voice = mine and \"Boule de feu sur toi, rejoins le partage\" or \"Maintenant, partage boule de feu\" end\n        s.put(\"fireball\", mine and \"BOULE DE FEU SUR TOI — PARTAGE\" or \"BOULE DE FEU — PARTAGE\",\n            f.countText or \"Comptage en cours\", instruction, 65, math.min(350, f.expires - now), voice)\n    end\nelse\n    if f then data.ucob_fireball_guide = nil end\n    s.drop(\"fireball\")\nend\n\nif s.phase == 1 and s.twintaniaID and s.tank(p) then\n    local boss = TensorCore.mGetEntity(s.twintaniaID)\n    if boss and boss.alive and boss.targetid == p.id then\n        local count=0\n        if data.ucob_nearest_links then\n            for id in pairs(data.ucob_nearest_links) do\n                local link=TensorCore.mGetEntity(id)\n                if link and link.contentid == 2001151 then count=count+1 end\n            end\n        end\n        local percent=boss.hp.percent\n        if (count==0 and percent<=78 and percent>0) or (count==1 and percent<=48 and percent>0) or (count==2 and percent<=3 and percent>0) then\n            s.put(\"neuroDrop\", \"NEUROLIEN \"..(count+1)..\" — PLACE LE BOSS\", \"Garde Gémellia sur le point de dépôt LPDU prévu\", nil, 55, 350)\n        else s.drop(\"neuroDrop\") end\n    else s.drop(\"neuroDrop\") end\nelse s.drop(\"neuroDrop\") end\nlocal thunder = TensorCore.getBuff(p, 466)\nif thunder and thunder.duration > 0 then\n    s.put(\"thunder\", \"FOUDRE SUR TOI — ÉCARTE-TOI\", string.format(\"Explosion dans %.1f s · reste hors du groupe\", thunder.duration), nil, 105, 350)\nelse s.drop(\"thunder\") end\nlocal doom = TensorCore.getBuff(p, 210)\nlocal d = data.ucob_doom_hud\nif doom and doom.duration > 0 then\n    local title = d and d.order and (\"GLAS \" .. d.order .. \" — PURIFIE-TOI\") or \"GLAS — PURIFIE-TOI\"\n    local detail = d and d.position and \"Rejoins la flaque indiquée\" or \"Attends ta flaque de purification\"\n    s.put(\"doom\", title, string.format(\"%.1f s · \", doom.duration) .. detail, nil, doom.duration <= 3 and 104 or 92, 350)\nelse s.drop(\"doom\") end\nlocal q = data.ucob_nael_calls\nif q and q.current and q.hudUntil and now < q.hudUntil then\n    if not s.words then\n        s.words = {IN=\"IN — SOUS NAEL\", OUT=\"OUT — ÉLOIGNE-TOI\", STACK=\"STACK — REGROUPEMENT\", SPREAD=\"SPREAD — ÉCARTEZ-VOUS\", TANK=\"TANK À L'ÉCART\"}\n    end\n    local detail = q.current == \"TANK\" and (s.tank(p) and \"Isole le tank ciblé ; respecte la cible du dive\" or \"Laisse le tank ciblé seul\") or \"Change de consigne à la résolution de l'attaque\"\n    s.put(\"quote\", s.words[q.current] or q.current, detail, q.next and (\"Ensuite : \" .. (s.words[q.next] or q.next)) or nil, 82, math.min(350,q.hudUntil-now))\nelse s.drop(\"quote\") end\nlocal dive = data.ucob_p2_dive\nif dive and dive.hudVisible and dive.hudTitle and dive.hudStatus then\n    s.put(\"p2Dive\", dive.hudTitle, dive.hudStatus, dive.hudNote, 95, 350)\nelse s.drop(\"p2Dive\") end\nlocal fire = data.ucob_guide_fire\nif fire and fire.expires and now < fire.expires and fire.title then\n    s.put(\"p2Fire\", fire.title, fire.detail, nil, fire.priority or 75, math.min(350,fire.expires-now))\nelse s.drop(\"p2Fire\") end\nlocal route = data.ucob_path_preview\ns.routeDetail = route and route.active and route.pulse and now-route.pulse < 500 and route.status or nil\nlocal fix = data.ucobP3DrawFix\nif fix and fix.flareUUID and fix.flareExpires and now < fix.flareExpires then\n    s.put(\"cleave\", s.tank(p) and \"SOUFFLE — GARDE LE BOSS ORIENTÉ\" or \"CLEAVE — ÉVITE DEVANT BAHAMUT\", \"Le repère rouge indique la direction du souffle\", nil, 48, 350)\nelse s.drop(\"cleave\") end\nif s.octetCheckAt and now >= s.octetCheckAt then\n    s.octetCheckAt = nil\n    if s.octetCount == 7 and not s.octet[p.id] then\n        local party = TensorCore.getEntityGroupList(\"Party\")\n        local count, marked, valid = 0, 0, true\n        if party then\n            for _, member in pairs(party) do\n                count = count + 1\n                if not member.alive then valid = false end\n                if s.octet[member.id] then marked = marked + 1 end\n            end\n        end\n        if valid and count == 8 and marked == 7 then\n            s.put(\"octetLast\", \"SANS MARQUEUR — PRÉPARE GÉMELLIA\", \"Prépare le dernier bait selon le placement de votre groupe\", \"TWISTER après le passage\", 89, 11500, \"Tu prends Gémellia\")\n        end\n    end\nend\nlocal best = s.select(now)\nif best and best.voice and not best.spoken and data.ucob_guide_settings.voice then\n    if not s.lastVoice or now-s.lastVoice >= 900 then\n        TensorCore.sendTTS(best.voice, 85)\n        best.spoken, s.lastVoice = true, now\n        if best == s.cues.fireball and data.ucob_fireball_guide then\n            data.ucob_fireball_guide.voiceDone = true\n        end\n    end\nend\nself.used = true\n",
 				executeType = 2,
 				loop = true,
 				mechanicTime = 7,
@@ -481,11 +481,91 @@ local tbl =
 		{
 			data = 
 			{
-				name = "Boule de feu - TTS et fleche",
+				name = "Boule de feu - Cible du partage",
 				uuid = "e2805749-fd92-3a71-9fcc-aa41e3b5101b",
 				version = 2,
 			},
 			inheritedObjectUUID = "5f9b9dd7-a5de-db69-b0c1-6e26c3091110",
+			inheritedOverwrites = 
+			{
+				actions = 
+				{
+					
+					{
+						type = "remove",
+						value = 
+						{
+							data = 
+							{
+								name = "",
+								uuid = "0c64c6b5-ac89-1f5e-b6f9-3d186af884ee",
+								version = 2.1,
+							},
+							inheritedObjectUUID = "19c55477-aea7-4d73-960a-96b4ae5ce96b",
+						},
+					},
+					
+					{
+						type = "remove",
+						value = 
+						{
+							data = 
+							{
+								name = "",
+								uuid = "e8719030-08e3-84a1-9c87-7de587fc469b",
+								version = 2.1,
+							},
+							inheritedObjectUUID = "b90e8aae-63f5-0c28-a2e6-64ee74c90f1f",
+						},
+					},
+					
+					{
+						type = "add",
+						value = 
+						{
+							data = 
+							{
+								name = "Suivre cible du partage",
+								uuid = "3a2da7e9-4cf7-31a3-b26b-3d0af1f65de0",
+								version = 2.1,
+							},
+							inheritedObjectUUID = "d41cd5ef-088c-0959-8818-d5757e5367bf",
+							inheritedOverwrites = 
+							{
+								actionLua = "data.ucob_twin_fire_4 = data.ucob_twin_fire_4 or {}\nlocal s = data.ucob_twin_fire_4\nif s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\nif s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\ns.target = eventArgs.entityID\ns.arrived = nil\ns.holdUntil = Now() + 500\ns.expires = Now() + 15000\nself.used = true",
+							},
+						},
+					},
+				},
+				conditions = 
+				{
+					
+					{
+						type = "remove",
+						value = 
+						{
+							data = 
+							{
+								name = "Cible : moi",
+								uuid = "16a63293-37a9-ac7e-a241-3643aab47f98",
+								version = 3,
+							},
+							inheritedObjectUUID = "44a0e962-e11f-4295-9a2c-3901937c6914",
+						},
+					},
+				},
+				name = "Boule de feu - Cible du partage",
+			},
+		},
+		
+		{
+			data = 
+			{
+				name = "Boule de feu - Fin du partage",
+				uuid = "8ebca44b-8651-1805-a114-78bed03105ec",
+				version = 2,
+			},
+			inheritedObjectUUID = "eab5e74b-2dea-3e94-a99e-6b2d48518385",
 			inheritedOverwrites = 
 			{
 				actions = 
@@ -497,36 +577,14 @@ local tbl =
 						{
 							data = 
 							{
-								name = "Voix - Boule de feu sur toi",
-								uuid = "0c64c6b5-ac89-1f5e-b6f9-3d186af884ee",
+								name = "Nettoyer dessins de partage",
+								uuid = "073cf1a8-d546-2899-838e-fb2ec6a1a47c",
 								version = 2.1,
 							},
-							inheritedObjectUUID = "19c55477-aea7-4d73-960a-96b4ae5ce96b",
+							inheritedObjectUUID = "d3280c8e-5fa9-03cc-afbe-805515608659",
 							inheritedOverwrites = 
 							{
-								aType = "Lua",
-								actionLua = "local cfg = data.ucob_guide_settings\nif data.ucob_guide then\n    if cfg and cfg.voice then TensorCore.sendTTS(\"Boule de feu sur toi\", 100) end\nelse\n    TensorCore.addAlertText(5000, \"Boule de feu sur toi\", 0.75, 1, true, 100)\nend\nself.used = true",
-								name = "Voix - Boule de feu sur toi",
-							},
-						},
-					},
-					
-					{
-						type = "add",
-						value = 
-						{
-							data = 
-							{
-								name = "Voix - Boule de feu, regroupez-vous",
-								uuid = "e8719030-08e3-84a1-9c87-7de587fc469b",
-								version = 2.1,
-							},
-							inheritedObjectUUID = "b90e8aae-63f5-0c28-a2e6-64ee74c90f1f",
-							inheritedOverwrites = 
-							{
-								aType = "Lua",
-								actionLua = "local cfg = data.ucob_guide_settings\nif data.ucob_guide then\n    if cfg and cfg.voice then TensorCore.sendTTS(\"Boule de feu, regroupez-vous\", 100) end\nelse\n    TensorCore.addAlertText(5000, \"Boule de feu, regroupez-vous\", 0.75, 1, true, 100)\nend\nself.used = true",
-								name = "Voix - Boule de feu, regroupez-vous",
+								actionLua = "for _, key in ipairs({\"ucob_twin_fire_4\", \"ucob_twin_fire_8\", \"ucob_twin_fire_24\", \"ucob_twin_fire_33\", \"ucob_twin_fire_135\"}) do\n    local s = data[key]\n    if s then\n        if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n        if s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\n        s.target = nil\n    end\nend\ndata.ucob_fireball_guide = nil\nlocal guide = data.ucob_guide\nif guide then guide.drop(\"fireball\") end\nself.used = true",
 							},
 						},
 					},
@@ -560,7 +618,7 @@ local tbl =
 							inheritedObjectUUID = "cce2045d-1ce0-3b1d-afce-15a2142088aa",
 							inheritedOverwrites = 
 							{
-								actionLua = "local s = data.ucob_twin_fire_4\nif not s or not s.target then self.used = true; return end\nlocal remaining = math.floor(math.min(s.expires - Now(), (21.3 - TensorReactions_CurrentTimer) * 1000))\nlocal p = TensorCore.mGetPlayer()\nlocal target = TensorCore.mGetEntity(s.target)\nif not p or not p.alive or p.hp.current <= 0 or not target or not target.alive or target.hp.current <= 0 or remaining <= 0 then\n    if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n    if s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\n    s.target = nil\n    self.used = true\n    return\nend\nlocal dx, dz = p.pos.x - target.pos.x, p.pos.z - target.pos.z\nlocal distanceSquared = dx * dx + dz * dz\n-- Two thresholds inside the 4y stack radius prevent boundary flicker.\nif distanceSquared <= 12.25 then\n    s.arrived = true\nelseif distanceSquared >= 14.44 then\n    s.arrived = false\nend\nlocal outside = not s.arrived\nlocal fill = outside and 536936447 or 536936192\nlocal outline = outside and 4278255615 or 4278255360\nlocal ring = TensorCore.getCachedDrawer(fill, nil, fill, outline, outside and 3 or 1.5)\nif s.circle and not ring:updateTimedCircleOnEnt(s.circle, nil, s.target, 4, 0, false, true) then s.circle = nil end\nif not s.circle then s.circle = ring:addTimedCircleOnEnt(remaining, s.target, 4, 0, false, true) end\nif outside then\n    local drawer = TensorCore.getCachedDrawer(4294963296, nil, 4294963296, 4279504646, 3)\n    drawer:setGradient(0.25, 0.4, 1.5)\n    -- Explicit distance and absolute heading place the tip at the destination.\n    local distance = math.sqrt(distanceSquared)\n    local tipLength = math.min(1.1, distance * 0.4)\n    local baseLength = distance - tipLength\n    local heading = TensorCore.getHeadingToTarget(p.pos, target.pos)\n    -- Replace an old target-attached arrow once, then keep updating the same shape.\n    if not s.fullLengthArrow then\n        if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n        s.fullLengthArrow = true\n    end\n    if s.uuid and not drawer:updateTimedArrowOnEnt(s.uuid, nil, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) then s.uuid = nil end\n    if not s.uuid then s.uuid = drawer:addTimedArrowOnEnt(remaining, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) end\nelseif s.uuid then\n    Argus.deleteTimedShape(s.uuid); s.uuid = nil\nend\nself.used = true",
+								actionLua = "local s = data.ucob_twin_fire_4\nif not s or not s.target then self.used = true; return end\nlocal remaining = math.floor(math.min(s.expires - Now(), (21.3 - TensorReactions_CurrentTimer) * 1000))\nlocal p = TensorCore.mGetPlayer()\nlocal target = TensorCore.mGetEntity(s.target)\nif not p or not p.alive or p.hp.current <= 0 or not target or not target.alive or target.hp.current <= 0 or remaining <= 0 then\n    if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n    if s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\n    s.target = nil\n    self.used = true\n    return\nend\nlocal dx, dz = p.pos.x - target.pos.x, p.pos.z - target.pos.z\nlocal distanceSquared = dx * dx + dz * dz\n-- Two thresholds inside the 4y stack radius prevent boundary flicker.\nif distanceSquared <= 12.25 then\n    s.arrived = true\nelseif distanceSquared >= 14.44 then\n    s.arrived = false\nend\nlocal outside = not s.arrived\nlocal now = Now()\nlocal f = data.ucob_fireball_guide\nlocal holdUntil = f and f.target == s.target and f.holdUntil or s.holdUntil or 0\nlocal waiting = now < holdUntil or (data.ucob_twister_until and now < data.ucob_twister_until)\nlocal fill = outside and 536936447 or 0x20FFF060\nlocal outline = outside and 4278255615 or 4294963296\nlocal ring = TensorCore.getCachedDrawer(fill, nil, fill, outline, outside and 3 or 1.5)\nif s.circle and not ring:updateTimedCircleOnEnt(s.circle, nil, s.target, 4, 0, false, true) then s.circle = nil end\nif not s.circle then s.circle = ring:addTimedCircleOnEnt(remaining, s.target, 4, 0, false, true) end\nif outside and not waiting then\n    local drawer = TensorCore.getCachedDrawer(4294963296, nil, 4294963296, 4279504646, 3)\n    drawer:setGradient(0.25, 0.4, 1.5)\n    -- Explicit distance and absolute heading place the tip at the destination.\n    local distance = math.sqrt(distanceSquared)\n    local tipLength = math.min(1.1, distance * 0.4)\n    local baseLength = distance - tipLength\n    local heading = TensorCore.getHeadingToTarget(p.pos, target.pos)\n    -- Replace an old target-attached arrow once, then keep updating the same shape.\n    if not s.fullLengthArrow then\n        if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n        s.fullLengthArrow = true\n    end\n    if s.uuid and not drawer:updateTimedArrowOnEnt(s.uuid, nil, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) then s.uuid = nil end\n    if not s.uuid then s.uuid = drawer:addTimedArrowOnEnt(remaining, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) end\nelseif s.uuid then\n    Argus.deleteTimedShape(s.uuid); s.uuid = nil\nend\nself.used = true",
 							},
 						},
 					},
@@ -673,7 +731,7 @@ local tbl =
 		{
 			data = 
 			{
-				name = "Boule de feu - TTS et fleche",
+				name = "Boule de feu - Cible du partage",
 				uuid = "5ce1052f-157f-ba3c-bedd-3aa9b991afd3",
 				version = 2,
 			},
@@ -684,22 +742,30 @@ local tbl =
 				{
 					
 					{
-						type = "add",
+						type = "remove",
 						value = 
 						{
 							data = 
 							{
-								name = "Voix - Boule de feu sur toi",
+								name = "",
 								uuid = "df423c24-3189-3e5d-aa5d-0b8f3ba6f401",
 								version = 2.1,
 							},
 							inheritedObjectUUID = "15805dab-44c9-d081-acdb-064c9e516bc0",
-							inheritedOverwrites = 
+						},
+					},
+					
+					{
+						type = "remove",
+						value = 
+						{
+							data = 
 							{
-								aType = "Lua",
-								actionLua = "local cfg = data.ucob_guide_settings\nif data.ucob_guide then\n    if cfg and cfg.voice then TensorCore.sendTTS(\"Boule de feu sur toi\", 100) end\nelse\n    TensorCore.addAlertText(5000, \"Boule de feu sur toi\", 0.75, 1, true, 100)\nend\nself.used = true",
-								name = "Voix - Boule de feu sur toi",
+								name = "",
+								uuid = "642847ca-d795-0f01-9e84-8464c2e779b7",
+								version = 2.1,
 							},
+							inheritedObjectUUID = "4276dcb2-4b67-29d7-ac0b-19cc873bbbd1",
 						},
 					},
 					
@@ -709,20 +775,36 @@ local tbl =
 						{
 							data = 
 							{
-								name = "Voix - Boule de feu, regroupez-vous",
-								uuid = "642847ca-d795-0f01-9e84-8464c2e779b7",
+								name = "Suivre cible du partage",
+								uuid = "1e532ca4-8be8-16a4-921a-c521bdc9e5d4",
 								version = 2.1,
 							},
-							inheritedObjectUUID = "4276dcb2-4b67-29d7-ac0b-19cc873bbbd1",
+							inheritedObjectUUID = "a9606165-f8ab-38af-8515-c3edd063eb12",
 							inheritedOverwrites = 
 							{
-								aType = "Lua",
-								actionLua = "local cfg = data.ucob_guide_settings\nif data.ucob_guide then\n    if cfg and cfg.voice then TensorCore.sendTTS(\"Boule de feu, regroupez-vous\", 100) end\nelse\n    TensorCore.addAlertText(5000, \"Boule de feu, regroupez-vous\", 0.75, 1, true, 100)\nend\nself.used = true",
-								name = "Voix - Boule de feu, regroupez-vous",
+								actionLua = "data.ucob_twin_fire_8 = data.ucob_twin_fire_8 or {}\nlocal s = data.ucob_twin_fire_8\nif s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\nif s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\ns.target = eventArgs.entityID\ns.arrived = nil\ns.holdUntil = Now() + 500\ns.expires = Now() + 15000\nself.used = true",
 							},
 						},
 					},
 				},
+				conditions = 
+				{
+					
+					{
+						type = "remove",
+						value = 
+						{
+							data = 
+							{
+								name = "Cible : moi",
+								uuid = "2c594680-76e3-52d2-bc5d-c68e8fa0ad4c",
+								version = 3,
+							},
+							inheritedObjectUUID = "c11d10bd-09ba-ff10-9251-d75551e4a937",
+						},
+					},
+				},
+				name = "Boule de feu - Cible du partage",
 			},
 		},
 		
@@ -752,7 +834,7 @@ local tbl =
 							inheritedObjectUUID = "9b24159e-ba1a-184d-8e17-e9120e7437c6",
 							inheritedOverwrites = 
 							{
-								actionLua = "local s = data.ucob_twin_fire_8\nif not s or not s.target then self.used = true; return end\nlocal remaining = math.floor(math.min(s.expires - Now(), (41 - TensorReactions_CurrentTimer) * 1000))\nlocal p = TensorCore.mGetPlayer()\nlocal target = TensorCore.mGetEntity(s.target)\nif not p or not p.alive or p.hp.current <= 0 or not target or not target.alive or target.hp.current <= 0 or remaining <= 0 then\n    if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n    if s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\n    s.target = nil\n    self.used = true\n    return\nend\nlocal dx, dz = p.pos.x - target.pos.x, p.pos.z - target.pos.z\nlocal distanceSquared = dx * dx + dz * dz\n-- Two thresholds inside the 4y stack radius prevent boundary flicker.\nif distanceSquared <= 12.25 then\n    s.arrived = true\nelseif distanceSquared >= 14.44 then\n    s.arrived = false\nend\nlocal outside = not s.arrived\nlocal fill = outside and 536936447 or 536936192\nlocal outline = outside and 4278255615 or 4278255360\nlocal ring = TensorCore.getCachedDrawer(fill, nil, fill, outline, outside and 3 or 1.5)\nif s.circle and not ring:updateTimedCircleOnEnt(s.circle, nil, s.target, 4, 0, false, true) then s.circle = nil end\nif not s.circle then s.circle = ring:addTimedCircleOnEnt(remaining, s.target, 4, 0, false, true) end\nif outside then\n    local drawer = TensorCore.getCachedDrawer(4294963296, nil, 4294963296, 4279504646, 3)\n    drawer:setGradient(0.25, 0.4, 1.5)\n    -- Explicit distance and absolute heading place the tip at the destination.\n    local distance = math.sqrt(distanceSquared)\n    local tipLength = math.min(1.1, distance * 0.4)\n    local baseLength = distance - tipLength\n    local heading = TensorCore.getHeadingToTarget(p.pos, target.pos)\n    -- Replace an old target-attached arrow once, then keep updating the same shape.\n    if not s.fullLengthArrow then\n        if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n        s.fullLengthArrow = true\n    end\n    if s.uuid and not drawer:updateTimedArrowOnEnt(s.uuid, nil, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) then s.uuid = nil end\n    if not s.uuid then s.uuid = drawer:addTimedArrowOnEnt(remaining, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) end\nelseif s.uuid then\n    Argus.deleteTimedShape(s.uuid); s.uuid = nil\nend\nself.used = true",
+								actionLua = "local s = data.ucob_twin_fire_8\nif not s or not s.target then self.used = true; return end\nlocal remaining = math.floor(math.min(s.expires - Now(), (41 - TensorReactions_CurrentTimer) * 1000))\nlocal p = TensorCore.mGetPlayer()\nlocal target = TensorCore.mGetEntity(s.target)\nif not p or not p.alive or p.hp.current <= 0 or not target or not target.alive or target.hp.current <= 0 or remaining <= 0 then\n    if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n    if s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\n    s.target = nil\n    self.used = true\n    return\nend\nlocal dx, dz = p.pos.x - target.pos.x, p.pos.z - target.pos.z\nlocal distanceSquared = dx * dx + dz * dz\n-- Two thresholds inside the 4y stack radius prevent boundary flicker.\nif distanceSquared <= 12.25 then\n    s.arrived = true\nelseif distanceSquared >= 14.44 then\n    s.arrived = false\nend\nlocal outside = not s.arrived\nlocal now = Now()\nlocal f = data.ucob_fireball_guide\nlocal holdUntil = f and f.target == s.target and f.holdUntil or s.holdUntil or 0\nlocal waiting = now < holdUntil or (data.ucob_twister_until and now < data.ucob_twister_until)\nlocal fill = outside and 536936447 or 0x20FFF060\nlocal outline = outside and 4278255615 or 4294963296\nlocal ring = TensorCore.getCachedDrawer(fill, nil, fill, outline, outside and 3 or 1.5)\nif s.circle and not ring:updateTimedCircleOnEnt(s.circle, nil, s.target, 4, 0, false, true) then s.circle = nil end\nif not s.circle then s.circle = ring:addTimedCircleOnEnt(remaining, s.target, 4, 0, false, true) end\nif outside and not waiting then\n    local drawer = TensorCore.getCachedDrawer(4294963296, nil, 4294963296, 4279504646, 3)\n    drawer:setGradient(0.25, 0.4, 1.5)\n    -- Explicit distance and absolute heading place the tip at the destination.\n    local distance = math.sqrt(distanceSquared)\n    local tipLength = math.min(1.1, distance * 0.4)\n    local baseLength = distance - tipLength\n    local heading = TensorCore.getHeadingToTarget(p.pos, target.pos)\n    -- Replace an old target-attached arrow once, then keep updating the same shape.\n    if not s.fullLengthArrow then\n        if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n        s.fullLengthArrow = true\n    end\n    if s.uuid and not drawer:updateTimedArrowOnEnt(s.uuid, nil, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) then s.uuid = nil end\n    if not s.uuid then s.uuid = drawer:addTimedArrowOnEnt(remaining, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) end\nelseif s.uuid then\n    Argus.deleteTimedShape(s.uuid); s.uuid = nil\nend\nself.used = true",
 							},
 						},
 					},
@@ -1067,7 +1149,7 @@ local tbl =
 		{
 			data = 
 			{
-				name = "Boule de feu - TTS et fleche",
+				name = "Boule de feu - Cible du partage",
 				uuid = "f34bb59f-874c-7b16-9025-caf148b4ac31",
 				version = 2,
 			},
@@ -1078,22 +1160,30 @@ local tbl =
 				{
 					
 					{
-						type = "add",
+						type = "remove",
 						value = 
 						{
 							data = 
 							{
-								name = "Voix - Boule de feu sur toi",
+								name = "",
 								uuid = "5f68d229-36f4-8986-91c2-5dc20663d535",
 								version = 2.1,
 							},
 							inheritedObjectUUID = "5a49dc5f-2651-8c3f-88cf-b03498e60a0a",
-							inheritedOverwrites = 
+						},
+					},
+					
+					{
+						type = "remove",
+						value = 
+						{
+							data = 
 							{
-								aType = "Lua",
-								actionLua = "local cfg = data.ucob_guide_settings\nif data.ucob_guide then\n    if cfg and cfg.voice then TensorCore.sendTTS(\"Boule de feu sur toi\", 100) end\nelse\n    TensorCore.addAlertText(5000, \"Boule de feu sur toi\", 0.75, 1, true, 100)\nend\nself.used = true",
-								name = "Voix - Boule de feu sur toi",
+								name = "",
+								uuid = "62286a6d-e689-cc52-99d4-d6957c10c1d5",
+								version = 2.1,
 							},
+							inheritedObjectUUID = "8027e2fa-ee59-1dcb-8a8f-f8a95cf04e06",
 						},
 					},
 					
@@ -1103,20 +1193,36 @@ local tbl =
 						{
 							data = 
 							{
-								name = "Voix - Boule de feu, regroupez-vous",
-								uuid = "62286a6d-e689-cc52-99d4-d6957c10c1d5",
+								name = "Suivre cible du partage",
+								uuid = "a20c865a-4ee8-cbb4-a8f3-f3049918e16b",
 								version = 2.1,
 							},
-							inheritedObjectUUID = "8027e2fa-ee59-1dcb-8a8f-f8a95cf04e06",
+							inheritedObjectUUID = "7db6dfed-046a-59da-a387-500ea115dd22",
 							inheritedOverwrites = 
 							{
-								aType = "Lua",
-								actionLua = "local cfg = data.ucob_guide_settings\nif data.ucob_guide then\n    if cfg and cfg.voice then TensorCore.sendTTS(\"Boule de feu, regroupez-vous\", 100) end\nelse\n    TensorCore.addAlertText(5000, \"Boule de feu, regroupez-vous\", 0.75, 1, true, 100)\nend\nself.used = true",
-								name = "Voix - Boule de feu, regroupez-vous",
+								actionLua = "data.ucob_twin_fire_24 = data.ucob_twin_fire_24 or {}\nlocal s = data.ucob_twin_fire_24\nif s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\nif s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\ns.target = eventArgs.entityID\ns.arrived = nil\ns.holdUntil = Now() + 500\ns.expires = Now() + 15000\nself.used = true",
 							},
 						},
 					},
 				},
+				conditions = 
+				{
+					
+					{
+						type = "remove",
+						value = 
+						{
+							data = 
+							{
+								name = "Cible : moi",
+								uuid = "7250ea36-195c-69e1-804c-19e4567208df",
+								version = 3,
+							},
+							inheritedObjectUUID = "d70e98ac-ec96-e500-bc89-3df82b711d80",
+						},
+					},
+				},
+				name = "Boule de feu - Cible du partage",
 			},
 		},
 		
@@ -1146,7 +1252,7 @@ local tbl =
 							inheritedObjectUUID = "cf4278cf-06a4-257a-9f40-f57518f0d722",
 							inheritedOverwrites = 
 							{
-								actionLua = "local s = data.ucob_twin_fire_24\nif not s or not s.target then self.used = true; return end\nlocal remaining = math.floor(math.min(s.expires - Now(), (129.6 - TensorReactions_CurrentTimer) * 1000))\nlocal p = TensorCore.mGetPlayer()\nlocal target = TensorCore.mGetEntity(s.target)\nif not p or not p.alive or p.hp.current <= 0 or not target or not target.alive or target.hp.current <= 0 or remaining <= 0 then\n    if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n    if s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\n    s.target = nil\n    self.used = true\n    return\nend\nlocal dx, dz = p.pos.x - target.pos.x, p.pos.z - target.pos.z\nlocal distanceSquared = dx * dx + dz * dz\n-- Two thresholds inside the 4y stack radius prevent boundary flicker.\nif distanceSquared <= 12.25 then\n    s.arrived = true\nelseif distanceSquared >= 14.44 then\n    s.arrived = false\nend\nlocal outside = not s.arrived\nlocal fill = outside and 536936447 or 536936192\nlocal outline = outside and 4278255615 or 4278255360\nlocal ring = TensorCore.getCachedDrawer(fill, nil, fill, outline, outside and 3 or 1.5)\nif s.circle and not ring:updateTimedCircleOnEnt(s.circle, nil, s.target, 4, 0, false, true) then s.circle = nil end\nif not s.circle then s.circle = ring:addTimedCircleOnEnt(remaining, s.target, 4, 0, false, true) end\nif outside then\n    local drawer = TensorCore.getCachedDrawer(4294963296, nil, 4294963296, 4279504646, 3)\n    drawer:setGradient(0.25, 0.4, 1.5)\n    -- Explicit distance and absolute heading place the tip at the destination.\n    local distance = math.sqrt(distanceSquared)\n    local tipLength = math.min(1.1, distance * 0.4)\n    local baseLength = distance - tipLength\n    local heading = TensorCore.getHeadingToTarget(p.pos, target.pos)\n    -- Replace an old target-attached arrow once, then keep updating the same shape.\n    if not s.fullLengthArrow then\n        if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n        s.fullLengthArrow = true\n    end\n    if s.uuid and not drawer:updateTimedArrowOnEnt(s.uuid, nil, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) then s.uuid = nil end\n    if not s.uuid then s.uuid = drawer:addTimedArrowOnEnt(remaining, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) end\nelseif s.uuid then\n    Argus.deleteTimedShape(s.uuid); s.uuid = nil\nend\nself.used = true",
+								actionLua = "local s = data.ucob_twin_fire_24\nif not s or not s.target then self.used = true; return end\nlocal remaining = math.floor(math.min(s.expires - Now(), (129.6 - TensorReactions_CurrentTimer) * 1000))\nlocal p = TensorCore.mGetPlayer()\nlocal target = TensorCore.mGetEntity(s.target)\nif not p or not p.alive or p.hp.current <= 0 or not target or not target.alive or target.hp.current <= 0 or remaining <= 0 then\n    if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n    if s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\n    s.target = nil\n    self.used = true\n    return\nend\nlocal dx, dz = p.pos.x - target.pos.x, p.pos.z - target.pos.z\nlocal distanceSquared = dx * dx + dz * dz\n-- Two thresholds inside the 4y stack radius prevent boundary flicker.\nif distanceSquared <= 12.25 then\n    s.arrived = true\nelseif distanceSquared >= 14.44 then\n    s.arrived = false\nend\nlocal outside = not s.arrived\nlocal now = Now()\nlocal f = data.ucob_fireball_guide\nlocal holdUntil = f and f.target == s.target and f.holdUntil or s.holdUntil or 0\nlocal waiting = now < holdUntil or (data.ucob_twister_until and now < data.ucob_twister_until)\nlocal fill = outside and 536936447 or 0x20FFF060\nlocal outline = outside and 4278255615 or 4294963296\nlocal ring = TensorCore.getCachedDrawer(fill, nil, fill, outline, outside and 3 or 1.5)\nif s.circle and not ring:updateTimedCircleOnEnt(s.circle, nil, s.target, 4, 0, false, true) then s.circle = nil end\nif not s.circle then s.circle = ring:addTimedCircleOnEnt(remaining, s.target, 4, 0, false, true) end\nif outside and not waiting then\n    local drawer = TensorCore.getCachedDrawer(4294963296, nil, 4294963296, 4279504646, 3)\n    drawer:setGradient(0.25, 0.4, 1.5)\n    -- Explicit distance and absolute heading place the tip at the destination.\n    local distance = math.sqrt(distanceSquared)\n    local tipLength = math.min(1.1, distance * 0.4)\n    local baseLength = distance - tipLength\n    local heading = TensorCore.getHeadingToTarget(p.pos, target.pos)\n    -- Replace an old target-attached arrow once, then keep updating the same shape.\n    if not s.fullLengthArrow then\n        if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n        s.fullLengthArrow = true\n    end\n    if s.uuid and not drawer:updateTimedArrowOnEnt(s.uuid, nil, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) then s.uuid = nil end\n    if not s.uuid then s.uuid = drawer:addTimedArrowOnEnt(remaining, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) end\nelseif s.uuid then\n    Argus.deleteTimedShape(s.uuid); s.uuid = nil\nend\nself.used = true",
 							},
 						},
 					},
@@ -1328,7 +1434,7 @@ local tbl =
 		{
 			data = 
 			{
-				name = "Boule de feu - TTS et fleche",
+				name = "Boule de feu - Cible du partage",
 				uuid = "93fb6a46-2b15-631d-b412-7e686cca418f",
 				version = 2,
 			},
@@ -1339,22 +1445,30 @@ local tbl =
 				{
 					
 					{
-						type = "add",
+						type = "remove",
 						value = 
 						{
 							data = 
 							{
-								name = "Voix - Boule de feu sur toi",
+								name = "",
 								uuid = "95173de0-ac83-3bb4-8867-2dbf6f2cbea0",
 								version = 2.1,
 							},
 							inheritedObjectUUID = "d243a6b7-7413-cb18-ab72-b0553c1155c2",
-							inheritedOverwrites = 
+						},
+					},
+					
+					{
+						type = "remove",
+						value = 
+						{
+							data = 
 							{
-								aType = "Lua",
-								actionLua = "local cfg = data.ucob_guide_settings\nif data.ucob_guide then\n    if cfg and cfg.voice then TensorCore.sendTTS(\"Boule de feu sur toi\", 100) end\nelse\n    TensorCore.addAlertText(5000, \"Boule de feu sur toi\", 0.75, 1, true, 100)\nend\nself.used = true",
-								name = "Voix - Boule de feu sur toi",
+								name = "",
+								uuid = "34a9d410-ddc0-268e-8a0c-63baa020084f",
+								version = 2.1,
 							},
+							inheritedObjectUUID = "7243695c-4981-b6bb-b3df-7e144a55a014",
 						},
 					},
 					
@@ -1364,20 +1478,36 @@ local tbl =
 						{
 							data = 
 							{
-								name = "Voix - Boule de feu, regroupez-vous",
-								uuid = "34a9d410-ddc0-268e-8a0c-63baa020084f",
+								name = "Suivre cible du partage",
+								uuid = "ca154dc5-5810-45cc-a6ef-92f2c0b8faff",
 								version = 2.1,
 							},
-							inheritedObjectUUID = "7243695c-4981-b6bb-b3df-7e144a55a014",
+							inheritedObjectUUID = "3c4e8811-8dde-7e14-b3d2-5220d23862d3",
 							inheritedOverwrites = 
 							{
-								aType = "Lua",
-								actionLua = "local cfg = data.ucob_guide_settings\nif data.ucob_guide then\n    if cfg and cfg.voice then TensorCore.sendTTS(\"Boule de feu, regroupez-vous\", 100) end\nelse\n    TensorCore.addAlertText(5000, \"Boule de feu, regroupez-vous\", 0.75, 1, true, 100)\nend\nself.used = true",
-								name = "Voix - Boule de feu, regroupez-vous",
+								actionLua = "data.ucob_twin_fire_33 = data.ucob_twin_fire_33 or {}\nlocal s = data.ucob_twin_fire_33\nif s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\nif s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\ns.target = eventArgs.entityID\ns.arrived = nil\ns.holdUntil = Now() + 500\ns.expires = Now() + 15000\nself.used = true",
 							},
 						},
 					},
 				},
+				conditions = 
+				{
+					
+					{
+						type = "remove",
+						value = 
+						{
+							data = 
+							{
+								name = "Cible : moi",
+								uuid = "0bc8321b-7140-729a-a93f-3352baca1627",
+								version = 3,
+							},
+							inheritedObjectUUID = "5082842b-7552-bc0a-9124-2ae036264558",
+						},
+					},
+				},
+				name = "Boule de feu - Cible du partage",
 			},
 		},
 		
@@ -1407,7 +1537,7 @@ local tbl =
 							inheritedObjectUUID = "aef91689-4858-2533-827e-a294a1ae9643",
 							inheritedOverwrites = 
 							{
-								actionLua = "local s = data.ucob_twin_fire_33\nif not s or not s.target then self.used = true; return end\nlocal remaining = math.floor(math.min(s.expires - Now(), (177 - TensorReactions_CurrentTimer) * 1000))\nlocal p = TensorCore.mGetPlayer()\nlocal target = TensorCore.mGetEntity(s.target)\nif not p or not p.alive or p.hp.current <= 0 or not target or not target.alive or target.hp.current <= 0 or remaining <= 0 then\n    if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n    if s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\n    s.target = nil\n    self.used = true\n    return\nend\nlocal dx, dz = p.pos.x - target.pos.x, p.pos.z - target.pos.z\nlocal distanceSquared = dx * dx + dz * dz\n-- Two thresholds inside the 4y stack radius prevent boundary flicker.\nif distanceSquared <= 12.25 then\n    s.arrived = true\nelseif distanceSquared >= 14.44 then\n    s.arrived = false\nend\nlocal outside = not s.arrived\nlocal fill = outside and 536936447 or 536936192\nlocal outline = outside and 4278255615 or 4278255360\nlocal ring = TensorCore.getCachedDrawer(fill, nil, fill, outline, outside and 3 or 1.5)\nif s.circle and not ring:updateTimedCircleOnEnt(s.circle, nil, s.target, 4, 0, false, true) then s.circle = nil end\nif not s.circle then s.circle = ring:addTimedCircleOnEnt(remaining, s.target, 4, 0, false, true) end\nif outside then\n    local drawer = TensorCore.getCachedDrawer(4294963296, nil, 4294963296, 4279504646, 3)\n    drawer:setGradient(0.25, 0.4, 1.5)\n    -- Explicit distance and absolute heading place the tip at the destination.\n    local distance = math.sqrt(distanceSquared)\n    local tipLength = math.min(1.1, distance * 0.4)\n    local baseLength = distance - tipLength\n    local heading = TensorCore.getHeadingToTarget(p.pos, target.pos)\n    -- Replace an old target-attached arrow once, then keep updating the same shape.\n    if not s.fullLengthArrow then\n        if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n        s.fullLengthArrow = true\n    end\n    if s.uuid and not drawer:updateTimedArrowOnEnt(s.uuid, nil, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) then s.uuid = nil end\n    if not s.uuid then s.uuid = drawer:addTimedArrowOnEnt(remaining, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) end\nelseif s.uuid then\n    Argus.deleteTimedShape(s.uuid); s.uuid = nil\nend\nself.used = true",
+								actionLua = "local s = data.ucob_twin_fire_33\nif not s or not s.target then self.used = true; return end\nlocal remaining = math.floor(math.min(s.expires - Now(), (177 - TensorReactions_CurrentTimer) * 1000))\nlocal p = TensorCore.mGetPlayer()\nlocal target = TensorCore.mGetEntity(s.target)\nif not p or not p.alive or p.hp.current <= 0 or not target or not target.alive or target.hp.current <= 0 or remaining <= 0 then\n    if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n    if s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\n    s.target = nil\n    self.used = true\n    return\nend\nlocal dx, dz = p.pos.x - target.pos.x, p.pos.z - target.pos.z\nlocal distanceSquared = dx * dx + dz * dz\n-- Two thresholds inside the 4y stack radius prevent boundary flicker.\nif distanceSquared <= 12.25 then\n    s.arrived = true\nelseif distanceSquared >= 14.44 then\n    s.arrived = false\nend\nlocal outside = not s.arrived\nlocal now = Now()\nlocal f = data.ucob_fireball_guide\nlocal holdUntil = f and f.target == s.target and f.holdUntil or s.holdUntil or 0\nlocal waiting = now < holdUntil or (data.ucob_twister_until and now < data.ucob_twister_until)\nlocal fill = outside and 536936447 or 0x20FFF060\nlocal outline = outside and 4278255615 or 4294963296\nlocal ring = TensorCore.getCachedDrawer(fill, nil, fill, outline, outside and 3 or 1.5)\nif s.circle and not ring:updateTimedCircleOnEnt(s.circle, nil, s.target, 4, 0, false, true) then s.circle = nil end\nif not s.circle then s.circle = ring:addTimedCircleOnEnt(remaining, s.target, 4, 0, false, true) end\nif outside and not waiting then\n    local drawer = TensorCore.getCachedDrawer(4294963296, nil, 4294963296, 4279504646, 3)\n    drawer:setGradient(0.25, 0.4, 1.5)\n    -- Explicit distance and absolute heading place the tip at the destination.\n    local distance = math.sqrt(distanceSquared)\n    local tipLength = math.min(1.1, distance * 0.4)\n    local baseLength = distance - tipLength\n    local heading = TensorCore.getHeadingToTarget(p.pos, target.pos)\n    -- Replace an old target-attached arrow once, then keep updating the same shape.\n    if not s.fullLengthArrow then\n        if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n        s.fullLengthArrow = true\n    end\n    if s.uuid and not drawer:updateTimedArrowOnEnt(s.uuid, nil, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) then s.uuid = nil end\n    if not s.uuid then s.uuid = drawer:addTimedArrowOnEnt(remaining, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) end\nelseif s.uuid then\n    Argus.deleteTimedShape(s.uuid); s.uuid = nil\nend\nself.used = true",
 							},
 						},
 					},
@@ -6337,6 +6467,86 @@ local tbl =
 		{
 			data = 
 			{
+				name = "Boule de feu - Cible du partage",
+				uuid = "d2507777-42bc-2a95-a05f-cf4ec5bffdc7",
+				version = 2,
+			},
+			inheritedObjectUUID = "14bd91bf-7589-c3cf-9100-98b9841a4913",
+			inheritedOverwrites = 
+			{
+				actions = 
+				{
+					
+					{
+						type = "remove",
+						value = 
+						{
+							data = 
+							{
+								name = "",
+								uuid = "d4c6439c-b3c8-2a1e-ab1a-53a46ae96112",
+								version = 2.1,
+							},
+							inheritedObjectUUID = "56ad87ce-a221-57f9-b643-61c3f8913598",
+						},
+					},
+					
+					{
+						type = "remove",
+						value = 
+						{
+							data = 
+							{
+								name = "",
+								uuid = "9358fabc-7ee8-587f-809e-5fc4f8016009",
+								version = 2.1,
+							},
+							inheritedObjectUUID = "8c9e23ca-70d8-39b4-a6bd-6cdfd02ea0a3",
+						},
+					},
+					
+					{
+						type = "add",
+						value = 
+						{
+							data = 
+							{
+								name = "Suivre cible du partage",
+								uuid = "3730a676-abca-7f7f-8535-74103314c4cb",
+								version = 2.1,
+							},
+							inheritedObjectUUID = "35e926c4-78e1-138d-bc54-a904a76c2d53",
+							inheritedOverwrites = 
+							{
+								actionLua = "data.ucob_twin_fire_135 = data.ucob_twin_fire_135 or {}\nlocal s = data.ucob_twin_fire_135\nif s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\nif s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\ns.target = eventArgs.entityID\ns.arrived = nil\ns.holdUntil = Now() + 500\ns.expires = Now() + 15000\nself.used = true",
+							},
+						},
+					},
+				},
+				conditions = 
+				{
+					
+					{
+						type = "remove",
+						value = 
+						{
+							data = 
+							{
+								name = "Cible : moi",
+								uuid = "347ce113-8293-3f16-ada3-5c6b89770b2e",
+								version = 3,
+							},
+							inheritedObjectUUID = "a5b5e252-da8d-212b-b718-2fad5b08c520",
+						},
+					},
+				},
+				name = "Boule de feu - Cible du partage",
+			},
+		},
+		
+		{
+			data = 
+			{
 				name = "Boule de feu - Distance",
 				uuid = "c8da04f9-4a4b-667d-8532-14b6115a7e6d",
 				version = 2,
@@ -6360,7 +6570,7 @@ local tbl =
 							inheritedObjectUUID = "c3ad175d-f904-6760-bd29-04a9be105058",
 							inheritedOverwrites = 
 							{
-								actionLua = "local s = data.ucob_twin_fire_135\nif not s or not s.target then self.used = true; return end\nlocal remaining = math.floor(math.min(s.expires - Now(), (708.5 - TensorReactions_CurrentTimer) * 1000))\nlocal p = TensorCore.mGetPlayer()\nlocal target = TensorCore.mGetEntity(s.target)\nif not p or not p.alive or p.hp.current <= 0 or not target or not target.alive or target.hp.current <= 0 or remaining <= 0 then\n    if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n    if s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\n    s.target = nil\n    self.used = true\n    return\nend\nlocal dx, dz = p.pos.x - target.pos.x, p.pos.z - target.pos.z\nlocal distanceSquared = dx * dx + dz * dz\n-- Two thresholds inside the 4y stack radius prevent boundary flicker.\nif distanceSquared <= 12.25 then\n    s.arrived = true\nelseif distanceSquared >= 14.44 then\n    s.arrived = false\nend\nlocal outside = not s.arrived\nlocal fill = outside and 536936447 or 536936192\nlocal outline = outside and 4278255615 or 4278255360\nlocal ring = TensorCore.getCachedDrawer(fill, nil, fill, outline, outside and 3 or 1.5)\nif s.circle and not ring:updateTimedCircleOnEnt(s.circle, nil, s.target, 4, 0, false, true) then s.circle = nil end\nif not s.circle then s.circle = ring:addTimedCircleOnEnt(remaining, s.target, 4, 0, false, true) end\nif outside then\n    local drawer = TensorCore.getCachedDrawer(4294963296, nil, 4294963296, 4279504646, 3)\n    drawer:setGradient(0.25, 0.4, 1.5)\n    -- Explicit distance and absolute heading place the tip at the destination.\n    local distance = math.sqrt(distanceSquared)\n    local tipLength = math.min(1.1, distance * 0.4)\n    local baseLength = distance - tipLength\n    local heading = TensorCore.getHeadingToTarget(p.pos, target.pos)\n    -- Replace an old target-attached arrow once, then keep updating the same shape.\n    if not s.fullLengthArrow then\n        if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n        s.fullLengthArrow = true\n    end\n    if s.uuid and not drawer:updateTimedArrowOnEnt(s.uuid, nil, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) then s.uuid = nil end\n    if not s.uuid then s.uuid = drawer:addTimedArrowOnEnt(remaining, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) end\nelseif s.uuid then\n    Argus.deleteTimedShape(s.uuid); s.uuid = nil\nend\nself.used = true",
+								actionLua = "local s = data.ucob_twin_fire_135\nif not s or not s.target then self.used = true; return end\nlocal remaining = math.floor(math.min(s.expires - Now(), (708.5 - TensorReactions_CurrentTimer) * 1000))\nlocal p = TensorCore.mGetPlayer()\nlocal target = TensorCore.mGetEntity(s.target)\nif not p or not p.alive or p.hp.current <= 0 or not target or not target.alive or target.hp.current <= 0 or remaining <= 0 then\n    if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n    if s.circle then Argus.deleteTimedShape(s.circle); s.circle = nil end\n    s.target = nil\n    self.used = true\n    return\nend\nlocal dx, dz = p.pos.x - target.pos.x, p.pos.z - target.pos.z\nlocal distanceSquared = dx * dx + dz * dz\n-- Two thresholds inside the 4y stack radius prevent boundary flicker.\nif distanceSquared <= 12.25 then\n    s.arrived = true\nelseif distanceSquared >= 14.44 then\n    s.arrived = false\nend\nlocal outside = not s.arrived\nlocal now = Now()\nlocal f = data.ucob_fireball_guide\nlocal holdUntil = f and f.target == s.target and f.holdUntil or s.holdUntil or 0\nlocal waiting = now < holdUntil or (data.ucob_twister_until and now < data.ucob_twister_until)\nlocal fill = outside and 536936447 or 0x20FFF060\nlocal outline = outside and 4278255615 or 4294963296\nlocal ring = TensorCore.getCachedDrawer(fill, nil, fill, outline, outside and 3 or 1.5)\nif s.circle and not ring:updateTimedCircleOnEnt(s.circle, nil, s.target, 4, 0, false, true) then s.circle = nil end\nif not s.circle then s.circle = ring:addTimedCircleOnEnt(remaining, s.target, 4, 0, false, true) end\nif outside and not waiting then\n    local drawer = TensorCore.getCachedDrawer(4294963296, nil, 4294963296, 4279504646, 3)\n    drawer:setGradient(0.25, 0.4, 1.5)\n    -- Explicit distance and absolute heading place the tip at the destination.\n    local distance = math.sqrt(distanceSquared)\n    local tipLength = math.min(1.1, distance * 0.4)\n    local baseLength = distance - tipLength\n    local heading = TensorCore.getHeadingToTarget(p.pos, target.pos)\n    -- Replace an old target-attached arrow once, then keep updating the same shape.\n    if not s.fullLengthArrow then\n        if s.uuid then Argus.deleteTimedShape(s.uuid); s.uuid = nil end\n        s.fullLengthArrow = true\n    end\n    if s.uuid and not drawer:updateTimedArrowOnEnt(s.uuid, nil, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) then s.uuid = nil end\n    if not s.uuid then s.uuid = drawer:addTimedArrowOnEnt(remaining, p.id, baseLength, 0.55, tipLength, 1.3, nil, 0, false, heading, true) end\nelseif s.uuid then\n    Argus.deleteTimedShape(s.uuid); s.uuid = nil\nend\nself.used = true",
 							},
 						},
 					},
